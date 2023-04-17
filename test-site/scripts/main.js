@@ -10,9 +10,8 @@ myImage.onclick = () => {
 }
 
 let myButton = document.querySelector("button");
+let myButton1 = document.getElementById("button1");
 let myHeading = document.querySelector("h1");
-
-
 
 if (!localStorage.getItem("name")) {
     setUserName();
@@ -28,7 +27,6 @@ myButton.onclick = () => {
 function setUserName() {
     const myName = prompt("あなたの名前は何ですか");
 
-
     if (!myName) {
         setUserName();
     } else {
@@ -36,5 +34,20 @@ function setUserName() {
         localStorage.setItem("name", myName);
         myHeading.textContent = `ぷにぷに選手権への準備ができたようだな、${myName}`;
     }
+}
 
+function createParagraph() {
+    const para = document.createElement("p");
+    para.textContent = "ボタンが押されました";
+    document.body.appendChild(para);
+}
+
+const buttons = document.querySelectorAll("button");
+
+for (const button of buttons) {
+    button.addEventListener("click", createParagraph);
+}
+
+myButton1.onclick = () => {
+    createParagraph();
 }
