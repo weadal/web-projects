@@ -4,7 +4,6 @@ use rand::Rng;
 
 use wasm_bindgen::prelude::*;
 
-extern crate web_sys;
 use web_sys::console::{self, log};
 
 //web_sysが提供するブラウザのコンソールにログを表示させるためのマクロをいじってprintln!風に書けるようにしている……らしい

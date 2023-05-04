@@ -36,6 +36,7 @@ const initCells = () => {
 const drawGrid = () => {
     ctx.beginPath();
     ctx.strokeStyle = GRID_COLOR;
+    ctx.lineWidth = 2;
 
     // Vertical lines.
     for (let i = 0; i <= width; i++) {
@@ -76,6 +77,24 @@ const drawCells = () => {
         for (let col = 0; col < width; col++) {
             const index = getIndex(row, col);
             if (cells[index] !== Cell.Alive) {
+                continue;
+            }
+
+            //矩形塗りつぶし 引数はx座標、y座標,xサイズ,yサイズ
+            ctx.fillRect(
+                col * (CELL_SIZE + 1) + 1,
+                row * (CELL_SIZE + 1) + 1,
+                CELL_SIZE,
+                CELL_SIZE);
+        }
+    }
+    //死んでるセルを描画
+    ctx.fillStyle = DEAD_COLOR;
+    for (let row = 0; row < height; row++) {
+
+        for (let col = 0; col < width; col++) {
+            const index = getIndex(row, col);
+            if (cells[index] !== Cell.Dead) {
                 continue;
             }
 
@@ -129,15 +148,14 @@ const drawCellsDelta = () => {
 }
 
 const drawBG = () => {
-    const boundingRect = canvas.getBoundingClientRect();
 
     ctx.beginPath();
     ctx.fillStyle = DEAD_COLOR;
     ctx.fillRect(
         0,
         0,
-        boundingRect.width,
-        boundingRect.height
+        canvas.width,
+        canvas.height
     )
 }
 
@@ -146,6 +164,8 @@ const playPauseButton = document.getElementById("play-pause");
 const play = () => {
     playPauseButton.textContent = "⏸";
 
+    drawGrid();
+    drawCells();
     renderLoop();
 }
 
@@ -172,7 +192,9 @@ const resetButton = document.getElementById("reset");
 resetButton.addEventListener("click", e => {
     universe.reset();
     initCells();
+    drawBG();
     drawGrid();
+    drawCells();
 
 })
 
@@ -186,7 +208,7 @@ const renderLoop = () => {
     universe.tick();
 
     //drawBG();
-    drawGrid();
+    //drawGrid();
     //drawCells();
     drawCellsDelta();
 
@@ -222,10 +244,20 @@ canvas.addEventListener("click", e => {
     const col = Math.min(Math.floor(localX / (CELL_SIZE + 1)), width - 1);
 
     universe.toggle_cell(row, col);
+    const idx = getIndex(row, col);
 
-    drawBG();
-    drawGrid();
-    drawCells();
+    if (cellMem[idx] === Cell.Alive) {
+        cellMem[idx] = Cell.Dead;
+    } else {
+        cellMem[idx] = Cell.Alive;
+    }
+
+    if (isPaused()) {
+
+        drawBG();
+        drawGrid();
+        drawCells();
+    }
 
 })
 
