@@ -39,8 +39,8 @@ pub fn start() -> Result<(), JsValue> {
     log(&format!("random_num:{:?}", random_num));
     let mut random_num_rc = Rc::new(RefCell::new(random_num));
 
-    let guess_submit = doc.query_selector(".guessSubmit").to_html_input_element();
-    let guess_field = doc.query_selector(".guessField").to_html_input_element();
+    let guess_submit = query_selector_to::<HtmlInputElement>(".guessSubmit").unwrap();
+    let guess_field = query_selector_to::<HtmlInputElement>(".guessField").unwrap();
 
     let mut doc_rc = Rc::new(RefCell::new(doc));
     let mut guess_count_rc = Rc::new(RefCell::new(1));
@@ -73,15 +73,9 @@ pub fn check_guess(
 ) {
     let random_num_ref = random_num_rc.borrow().clone();
 
-    let low_or_hi = doc_rc
-        .borrow()
-        .query_selector(".lowOrHi")
-        .to_html_paragraph_element();
+    let low_or_hi = query_selector_to::<HtmlParagraphElement>(".lowOrHi").unwrap();
+    let last_result = query_selector_to::<HtmlParagraphElement>(".lastResult").unwrap();
 
-    let last_result = doc_rc
-        .borrow()
-        .query_selector(".lastResult")
-        .to_html_paragraph_element();
     let user_guess = Number(&guess_field.value());
 
     add_record(doc_rc, &guess_count_rc.borrow().clone(), &user_guess);
@@ -118,7 +112,7 @@ pub fn add_record(
     guess_count: &i32,
     user_guess: &i32,
 ) {
-    let guesses = doc_rc.borrow().query_selector(".guesses").to_html_element();
+    let guesses = query_selector_to::<HtmlElement>(".guesses").unwrap();
 
     if *guess_count == 1 {
         guesses.set_text_content(Some("前回の予想: "));
@@ -136,14 +130,8 @@ fn set_gameover(
     random_num_rc: &mut Rc<RefCell<i32>>,
     guess_count_rc: &mut Rc<RefCell<i32>>,
 ) {
-    let guess_submit = doc_rc
-        .borrow()
-        .query_selector(".guessSubmit")
-        .to_html_input_element();
-    let guess_field = doc_rc
-        .borrow()
-        .query_selector(".guessField")
-        .to_html_input_element();
+    let guess_submit = query_selector_to::<HtmlInputElement>(".guessSubmit").unwrap();
+    let guess_field = query_selector_to::<HtmlInputElement>(".guessField").unwrap();
 
     guess_field.set_disabled(true);
     guess_submit.set_disabled(true);
@@ -151,7 +139,7 @@ fn set_gameover(
     let mut reset_button = doc_rc
         .borrow()
         .create_element("button")
-        .to_html_button_element();
+        .element_to::<HtmlButtonElement>();
     reset_button.set_text_content(Some("新しいゲームを始める"));
     doc_rc
         .borrow()
@@ -167,7 +155,7 @@ fn set_gameover(
     let reset_button_rc = Rc::new(RefCell::new(reset_button));
     let reset_button_rc_clone = reset_button_rc.clone();
 
-    let mut box1 = Box::new(move |_e: Event| {
+    let box1 = Box::new(move |_e: Event| {
         reset_game(
             &mut doc_rc_clone,
             &mut guess_count_rc_clone,
@@ -209,24 +197,15 @@ fn reset_game(
         .remove_child(&reset_button_rc.borrow())
         .unwrap();
 
-    let guess_submit = doc_rc
-        .borrow()
-        .query_selector(".guessSubmit")
-        .to_html_input_element();
-    let guess_field = doc_rc
-        .borrow()
-        .query_selector(".guessField")
-        .to_html_input_element();
+    let guess_submit = query_selector_to::<HtmlInputElement>(".guessSubmit").unwrap();
+    let guess_field = query_selector_to::<HtmlInputElement>(".guessField").unwrap();
 
     guess_field.set_disabled(false);
     guess_submit.set_disabled(false);
     guess_field.set_value("");
     guess_field.focus().unwrap();
 
-    let last_result = doc_rc
-        .borrow()
-        .query_selector(".lastResult")
-        .to_html_paragraph_element();
+    let last_result = query_selector_to::<HtmlParagraphElement>(".lastResult").unwrap();
 
     last_result.style().set_css_text("color: white");
 
