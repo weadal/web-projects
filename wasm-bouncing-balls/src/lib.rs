@@ -2,6 +2,7 @@ mod html_cast;
 mod utils;
 use std::{
     cell::{Ref, RefCell, RefMut},
+    clone,
     rc::{self, Rc},
 };
 
@@ -9,8 +10,8 @@ use html_cast::*;
 use js_sys::Math;
 use wasm_bindgen::prelude::*;
 use web_sys::{
-    CanvasRenderingContext2d, Event, HtmlButtonElement, HtmlCanvasElement, HtmlParagraphElement,
-    Performance,
+    CanvasRenderingContext2d, Event, HtmlButtonElement, HtmlCanvasElement, HtmlInputElement,
+    HtmlParagraphElement, Performance,
 };
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
@@ -26,6 +27,8 @@ extern "C" {
     #[wasm_bindgen(js_namespace = console)]
     fn log(s: &str);
 
+    fn Number(s: &str) -> i32;
+
 }
 
 #[wasm_bindgen]
@@ -39,36 +42,49 @@ pub fn start() -> Result<(), JsValue> {
     let height = 720.0;
     canvas.set_height(height as u32);
 
-    let mut balls: Vec<Ball> = Vec::new();
-
-    for _ in 0..25 {
-        let size = random_f64(10.0, 20.0);
-        let ball = Ball::new(
-            random_f64(0.0 + size, width as f64 - size),
-            random_f64(0.0 + size, height as f64 - size),
-            random_f64(-7.0, 7.0),
-            random_f64(-7.0, 7.0),
-            &random_rgb(),
-            size,
-        );
-
-        balls.push(ball);
-    }
-
+    let balls: Vec<Ball> = Vec::new();
     let balls_rc = Rc::new(RefCell::new(balls));
 
-    let play_button = query_selector_to::<HtmlButtonElement>(".play-pause").unwrap();
+    let balls_size = Number(
+        &query_selector_to::<HtmlInputElement>(".ball-field")
+            .unwrap()
+            .value(),
+    );
+
+    balls_init(&balls_rc, balls_size);
 
     let is_playing_rc = Rc::new(RefCell::new(true));
-    let mut is_playing_rc_clone = is_playing_rc.clone();
 
-    let closure: Closure<dyn FnMut()> = Closure::new(move || {
-        play_pause(&mut is_playing_rc_clone);
-    });
-    play_button
-        .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
-        .unwrap();
-    closure.forget();
+    //一時停止ボタン
+    {
+        let play_button = query_selector_to::<HtmlButtonElement>(".play-pause").unwrap();
+        let is_playing_rc_clone = is_playing_rc.clone();
+        let closure: Closure<dyn FnMut()> = Closure::new(move || {
+            play_pause(&is_playing_rc_clone);
+        });
+        play_button
+            .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
+            .unwrap();
+        closure.forget();
+    }
+    //ボール数変更UI
+    {
+        let balls_size_submit = query_selector_to::<HtmlInputElement>(".ball-submit").unwrap();
+
+        let balls_rc_clone = balls_rc.clone();
+        let closure: Closure<dyn FnMut()> = Closure::new(move || {
+            let balls_size = Number(
+                &query_selector_to::<HtmlInputElement>(".ball-field")
+                    .unwrap()
+                    .value(),
+            );
+            balls_init(&balls_rc_clone, balls_size);
+        });
+        balls_size_submit
+            .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
+            .unwrap();
+        closure.forget();
+    }
 
     main_loop(balls_rc.clone(), &is_playing_rc);
 
@@ -94,7 +110,7 @@ fn main_loop(balls_rc: Rc<RefCell<Vec<Ball>>>, is_playing_rc: &Rc<RefCell<bool>>
     request_animation_frame(&closure_clone);
 }
 
-fn play_pause(is_playing_rc: &mut Rc<RefCell<bool>>) {
+fn play_pause(is_playing_rc: &Rc<RefCell<bool>>) {
     let state = is_playing_rc.borrow().clone();
 
     if state {
@@ -119,6 +135,25 @@ fn update(balls: &mut RefMut<Vec<Ball>>) {
     for ball in balls.iter_mut() {
         ball.draw(&ctx);
         ball.moving(canvas.width() as f64, canvas.height() as f64);
+    }
+}
+
+fn balls_init(balls_rc: &Rc<RefCell<Vec<Ball>>>, balls_size: i32) {
+    let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
+    balls_rc.borrow_mut().clear();
+
+    for _ in 0..balls_size {
+        let size = random_f64(10.0, 20.0);
+        let ball = Ball::new(
+            random_f64(0.0 + size, canvas.width() as f64 - size),
+            random_f64(0.0 + size, canvas.height() as f64 - size),
+            random_f64(-7.0, 7.0),
+            random_f64(-7.0, 7.0),
+            &random_rgb(),
+            size,
+        );
+
+        balls_rc.borrow_mut().push(ball);
     }
 }
 
@@ -170,7 +205,6 @@ impl Ball {
 fn random_f64(min: f64, max: f64) -> f64 {
     Math::floor(Math::random() * (max - min + 1.0) as f64) + min
 }
-
 fn random_rgb() -> String {
     format!(
         "rgb({},{},{})",
