@@ -1,11 +1,17 @@
 mod html_cast;
 mod utils;
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    rc::{self, Rc},
+};
 
 use html_cast::*;
 use js_sys::Math;
 use wasm_bindgen::prelude::*;
-use web_sys::{CanvasRenderingContext2d, Event, HtmlCanvasElement, Window};
+use web_sys::{
+    CanvasRenderingContext2d, Event, HtmlButtonElement, HtmlCanvasElement, HtmlParagraphElement,
+    Performance,
+};
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.
@@ -27,14 +33,11 @@ pub fn start() -> Result<(), JsValue> {
     utils::set_panic_hook();
 
     let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
-    let window = web_sys::window().unwrap();
 
-    let width = Math::floor(window.inner_width().unwrap().as_f64().unwrap());
+    let width = 960.0;
     canvas.set_width(width as u32);
-    let height = Math::floor(window.inner_height().unwrap().as_f64().unwrap());
+    let height = 720.0;
     canvas.set_height(height as u32);
-
-    let mut ball = Ball::new(50.0, 100.0, 4.0, 4.0, "blue", 10.0);
 
     let mut balls: Vec<Ball> = Vec::new();
 
@@ -52,73 +55,71 @@ pub fn start() -> Result<(), JsValue> {
         balls.push(ball);
     }
 
-    let ctx_rc = Rc::new(RefCell::new(
-        canvas
-            .get_context("2d")
-            .unwrap()
-            .unwrap()
-            .dyn_into::<CanvasRenderingContext2d>()
-            .unwrap(),
-    ));
-
     let balls_rc = Rc::new(RefCell::new(balls));
 
-    main_loop(ctx_rc, balls_rc, width, height);
+    let play_button = query_selector_to::<HtmlButtonElement>(".play-pause").unwrap();
+
+    let is_playing_rc = Rc::new(RefCell::new(true));
+    let mut is_playing_rc_clone = is_playing_rc.clone();
+
+    let closure: Closure<dyn FnMut()> = Closure::new(move || {
+        play_pause(&mut is_playing_rc_clone);
+    });
+    play_button
+        .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
+        .unwrap();
+    closure.forget();
+
+    main_loop(balls_rc.clone(), &is_playing_rc);
 
     Ok(())
 }
 
-fn main_loop(
-    ctx_rc: Rc<RefCell<CanvasRenderingContext2d>>,
-    balls_rc: Rc<RefCell<Vec<Ball>>>,
-    canvas_width: f64,
-    canvas_height: f64,
-) {
-    let f: Rc<RefCell<Option<Closure<dyn FnMut()>>>> = Rc::new(RefCell::new(None));
-    let g = f.clone();
+fn main_loop(balls_rc: Rc<RefCell<Vec<Ball>>>, is_playing_rc: &Rc<RefCell<bool>>) {
+    let closure: Rc<RefCell<Option<Closure<dyn FnMut()>>>> = Rc::new(RefCell::new(None));
+    let closure_clone = closure.clone();
 
-    *g.borrow_mut() = Some(Closure::new(move || {
-        ctx_rc
-            .borrow()
-            .set_fill_style(&JsValue::from_str("rgba(0,0,0,1)"));
+    let mut fps = Fps::new();
 
-        ctx_rc
-            .borrow()
-            .fill_rect(0.0, 0.0, canvas_width, canvas_height);
+    let is_playing_rc_clone = is_playing_rc.clone();
+    *closure_clone.borrow_mut() = Some(Closure::new(move || {
+        if *is_playing_rc_clone.borrow() {
+            update(&mut balls_rc.borrow_mut());
 
-        let mut balls = balls_rc.borrow_mut();
-
-        //balls[0].draw();
-        balls[0].update(canvas_width, canvas_height);
-
-        for ball in balls.iter_mut() {
-            ball.draw(ctx_rc.clone());
-            ball.update(canvas_width, canvas_height);
+            fps.render();
         }
-
-        web_sys::window()
-            .unwrap()
-            .request_animation_frame(f.borrow().as_ref().unwrap().as_ref().unchecked_ref())
-            .unwrap();
+        request_animation_frame(&closure);
     }));
 
-    web_sys::window()
+    request_animation_frame(&closure_clone);
+}
+
+fn play_pause(is_playing_rc: &mut Rc<RefCell<bool>>) {
+    let state = is_playing_rc.borrow().clone();
+
+    if state {
+        *is_playing_rc.borrow_mut() = false;
+    } else {
+        *is_playing_rc.borrow_mut() = true;
+    }
+}
+
+fn update(balls: &mut RefMut<Vec<Ball>>) {
+    let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
+    let ctx = canvas
+        .get_context("2d")
         .unwrap()
-        .request_animation_frame(g.borrow().as_ref().unwrap().as_ref().unchecked_ref())
+        .unwrap()
+        .dyn_into::<CanvasRenderingContext2d>()
         .unwrap();
-}
 
-fn random_f64(min: f64, max: f64) -> f64 {
-    Math::floor(Math::random() * (max - min + 1.0) as f64) + min
-}
+    ctx.set_fill_style(&JsValue::from_str("rgba(0,0,0,1)"));
+    ctx.fill_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
 
-fn random_rgb() -> String {
-    format!(
-        "rgb({},{},{})",
-        random_f64(0.0, 255.0) as u32,
-        random_f64(0.0, 255.0) as u32,
-        random_f64(0.0, 255.0) as u32
-    )
+    for ball in balls.iter_mut() {
+        ball.draw(&ctx);
+        ball.moving(canvas.width() as f64, canvas.height() as f64);
+    }
 }
 
 struct Ball {
@@ -140,8 +141,7 @@ impl Ball {
             size,
         }
     }
-    fn draw(&self, ctx_rc: Rc<RefCell<CanvasRenderingContext2d>>) {
-        let ctx = ctx_rc.borrow();
+    fn draw(&self, ctx: &CanvasRenderingContext2d) {
         ctx.begin_path();
         ctx.set_fill_style(&JsValue::from_str(&self.color));
         ctx.arc(self.x, self.y, self.size, 0.0, 2.0 * std::f64::consts::PI)
@@ -149,7 +149,7 @@ impl Ball {
         ctx.fill();
     }
 
-    fn update(&mut self, canvas_width: f64, canvas_height: f64) {
+    fn moving(&mut self, canvas_width: f64, canvas_height: f64) {
         if self.x + self.size >= canvas_width {
             self.vel_x = -self.vel_x;
         }
@@ -164,5 +164,89 @@ impl Ball {
         }
         self.x += self.vel_x;
         self.y += self.vel_y;
+    }
+}
+
+fn random_f64(min: f64, max: f64) -> f64 {
+    Math::floor(Math::random() * (max - min + 1.0) as f64) + min
+}
+
+fn random_rgb() -> String {
+    format!(
+        "rgb({},{},{})",
+        random_f64(0.0, 255.0) as u32,
+        random_f64(0.0, 255.0) as u32,
+        random_f64(0.0, 255.0) as u32
+    )
+}
+
+fn request_animation_frame(closure_rc: &Rc<RefCell<Option<Closure<dyn FnMut()>>>>) -> i32 {
+    web_sys::window()
+        .unwrap()
+        .request_animation_frame(
+            closure_rc
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unchecked_ref(),
+        )
+        .unwrap()
+}
+
+struct Fps {
+    body: HtmlParagraphElement,
+    frames: Vec<f64>,
+    performance: web_sys::Performance,
+    last_frame_timestamp: f64,
+}
+impl Fps {
+    fn new() -> Fps {
+        let body = query_selector_to::<HtmlParagraphElement>(".fps-counter").unwrap();
+        let frames: Vec<f64> = vec![];
+        let performance = web_sys::window().unwrap().performance().unwrap();
+        let last_frame_timestamp = performance.now();
+
+        Fps {
+            body,
+            frames,
+            performance,
+            last_frame_timestamp,
+        }
+    }
+
+    fn render(&mut self) {
+        let now = self.performance.now();
+        let delta = now - self.last_frame_timestamp;
+        self.last_frame_timestamp = now;
+
+        let fps = 1000.0 / delta;
+
+        self.frames.push(fps);
+        if self.frames.len() > 100 {
+            self.frames.remove(0);
+        }
+
+        let mut min = f64::INFINITY;
+        let mut max = -f64::INFINITY;
+        let mut sum = 0.0;
+
+        for i in 0..self.frames.len() {
+            sum += self.frames[i];
+            min = Math::min(min, self.frames[i]);
+            max = Math::max(max, self.frames[i]);
+        }
+
+        let mean = sum / self.frames.len() as f64;
+        self.body.set_inner_html(
+            &format!(
+                "fps counter<br>latest = {}<br>avg of last 100 = {}<br>min of last 100 = {}<br>max of last 100 = {}",
+                Math::round(fps),
+                Math::round(mean),
+                Math::round(min),
+                Math::round(max)
+            )
+            .trim(),
+        );
     }
 }

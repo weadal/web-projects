@@ -42,6 +42,7 @@ features = [
 	"HtmlCanvasElement",
 	"CanvasRenderingContext2d",
 	"console",
+	"Performance",
 ]
 [dev-dependencies]
 wasm-bindgen-test = "0.3.13"

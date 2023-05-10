@@ -4,13 +4,31 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width">
-    <title>Bouncing balls</title>
+    <title>Bouncing balls Wasm version</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <h1>bouncing balls</h1>
-    <canvas></canvas>
+
+    <table>
+        <tr>
+            <td>
+                <p class="fps-counter">fps_counter</p>
+                <p class="ball-counter">ball_counter</p>
+                <p><button class="play-pause">Pause</button> <button class="reload">Reload</button></p>
+
+                <div class="form">
+                    <label for="ball-field">ボールの数を変更: </label>
+                    <input type="number" min="1" value="25" required id="ball-field" class="ball-field">
+                    <input type="submit" value="確定" class="ball-submit">
+                </div>
+            </td>
+            <td>
+                <canvas></canvas>
+
+            </td>
+        </tr>
+    </table>
     <script src="./bootstrap.js"></script>
 </body>
 
