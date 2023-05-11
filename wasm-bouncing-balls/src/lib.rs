@@ -132,10 +132,146 @@ fn update(balls: &mut RefMut<Vec<Ball>>) {
     ctx.set_fill_style(&JsValue::from_str("rgba(0,0,0,1)"));
     ctx.fill_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
 
+    let mut ballrefs: Vec<&Ball> = vec![];
+    for ball in balls.iter() {
+        ballrefs.push(ball.clone());
+    }
+
+    ctx.set_stroke_style(&JsValue::from_str("rgba(0.0,255.0,255.0,0.2)"));
+    ctx.set_line_width(2.0);
+
+    create_tree_x(ballrefs, &ctx);
+
     for ball in balls.iter_mut() {
         ball.draw(&ctx);
         ball.moving(canvas.width() as f64, canvas.height() as f64);
     }
+}
+fn create_tree_x<'a>(balls: Vec<&'a Ball>, ctx: &'a CanvasRenderingContext2d) -> Node<'a> {
+    if balls.len() == 1 {
+        return Node {
+            left_child: None,
+            right_child: None,
+            balls,
+        };
+    }
+
+    let aabb = Aabb::from_ballrefs(&balls);
+    draw_aabb(&ctx, &aabb);
+
+    let mut left_balls: Vec<&Ball> = vec![];
+    let mut right_balls: Vec<&Ball> = vec![];
+    let mut center_balls: Vec<&Ball> = vec![];
+
+    let parent_center_x = (aabb.x_max + aabb.x_min) / 2.0;
+
+    for ball in balls.iter() {
+        if ball.x < parent_center_x {
+            left_balls.push(ball.clone());
+        } else if ball.x > parent_center_x {
+            right_balls.push(ball.clone());
+        } else {
+            center_balls.push(ball.clone());
+        }
+    }
+
+    for ball in center_balls {
+        if left_balls.len() <= right_balls.len() {
+            left_balls.push(ball);
+        } else {
+            right_balls.push(ball);
+        }
+    }
+
+    let mut left_child = None;
+    let mut right_child = None;
+
+    if left_balls.len() > 0 {
+        left_child = Some(Box::new(create_tree_y(left_balls, &ctx)));
+    }
+    if right_balls.len() > 0 {
+        right_child = Some(Box::new(create_tree_y(right_balls, &ctx)));
+    }
+
+    let node = Node {
+        left_child,
+        right_child,
+        balls,
+    };
+
+    node
+}
+fn create_tree_y<'a>(balls: Vec<&'a Ball>, ctx: &'a CanvasRenderingContext2d) -> Node<'a> {
+    if balls.len() == 1 {
+        return Node {
+            left_child: None,
+            right_child: None,
+            balls,
+        };
+    }
+
+    let aabb = Aabb::from_ballrefs(&balls);
+    draw_aabb(&ctx, &aabb);
+
+    let mut left_balls: Vec<&Ball> = vec![];
+    let mut right_balls: Vec<&Ball> = vec![];
+    let mut center_balls: Vec<&Ball> = vec![];
+
+    let parent_center_y = (aabb.y_max + aabb.y_min) / 2.0;
+
+    for ball in balls.iter() {
+        if ball.y < parent_center_y {
+            left_balls.push(ball.clone());
+        } else if ball.y > parent_center_y {
+            right_balls.push(ball.clone());
+        } else {
+            center_balls.push(ball.clone());
+        }
+    }
+
+    for ball in center_balls {
+        if left_balls.len() <= right_balls.len() {
+            left_balls.push(ball);
+        } else {
+            right_balls.push(ball);
+        }
+    }
+
+    let mut left_child = None;
+    let mut right_child = None;
+
+    if left_balls.len() > 0 {
+        left_child = Some(Box::new(create_tree_x(left_balls, &ctx)));
+    }
+    if right_balls.len() > 0 {
+        right_child = Some(Box::new(create_tree_x(right_balls, &ctx)));
+    }
+
+    let node = Node {
+        left_child,
+        right_child,
+        balls,
+    };
+
+    node
+}
+
+struct Node<'a> {
+    left_child: Option<Box<Node<'a>>>,
+    right_child: Option<Box<Node<'a>>>,
+    balls: Vec<&'a Ball>,
+}
+
+fn draw_aabb(ctx: &CanvasRenderingContext2d, aabb: &Aabb) {
+    ctx.begin_path();
+
+    ctx.move_to(aabb.x_min, aabb.y_min);
+    ctx.line_to(aabb.x_max, aabb.y_min);
+    ctx.line_to(aabb.x_max, aabb.y_max);
+    ctx.line_to(aabb.x_min, aabb.y_max);
+    ctx.line_to(aabb.x_min, aabb.y_min);
+
+    ctx.stroke();
 }
 
 fn balls_init(balls_rc: &Rc<RefCell<Vec<Ball>>>, balls_size: i32) {
@@ -143,17 +279,122 @@ fn balls_init(balls_rc: &Rc<RefCell<Vec<Ball>>>, balls_size: i32) {
     balls_rc.borrow_mut().clear();
 
     for _ in 0..balls_size {
-        let size = random_f64(10.0, 20.0);
+        let size = random_f64(5.0, 40.0);
         let ball = Ball::new(
             random_f64(0.0 + size, canvas.width() as f64 - size),
             random_f64(0.0 + size, canvas.height() as f64 - size),
-            random_f64(-7.0, 7.0),
-            random_f64(-7.0, 7.0),
+            random_f64(-2.0, 2.0),
+            random_f64(-2.0, 2.0),
             &random_rgb(),
             size,
         );
 
         balls_rc.borrow_mut().push(ball);
+    }
+}
+
+struct Aabb {
+    x_max: f64,
+    x_min: f64,
+    y_max: f64,
+    y_min: f64,
+}
+impl Aabb {
+    fn from_circle(x: f64, y: f64, size: f64) -> Aabb {
+        Aabb {
+            x_max: x + size,
+            x_min: x - size,
+            y_max: y + size,
+            y_min: y - size,
+        }
+    }
+
+    fn from_aabbs(aabbs: Vec<Aabb>) -> Aabb {
+        let mut x_max = -f64::INFINITY;
+        let mut x_min = f64::INFINITY;
+        let mut y_max = -f64::INFINITY;
+        let mut y_min = f64::INFINITY;
+
+        for aabb in aabbs {
+            if aabb.x_max > x_max {
+                x_max = aabb.x_max;
+            }
+            if aabb.x_min < x_min {
+                x_min = aabb.x_min;
+            }
+            if aabb.y_max > y_max {
+                y_max = aabb.y_max;
+            }
+            if aabb.y_min < y_min {
+                y_min = aabb.y_min
+            }
+        }
+
+        Aabb {
+            x_max,
+            x_min,
+            y_max,
+            y_min,
+        }
+    }
+
+    fn from_balls(balls: &Vec<Ball>) -> Aabb {
+        let mut x_max = -f64::INFINITY;
+        let mut x_min = f64::INFINITY;
+        let mut y_max = -f64::INFINITY;
+        let mut y_min = f64::INFINITY;
+
+        for ball in balls {
+            let aabb = ball.Aabb();
+            if aabb.x_max > x_max {
+                x_max = aabb.x_max;
+            }
+            if aabb.x_min < x_min {
+                x_min = aabb.x_min;
+            }
+            if aabb.y_max > y_max {
+                y_max = aabb.y_max;
+            }
+            if aabb.y_min < y_min {
+                y_min = aabb.y_min
+            }
+        }
+
+        Aabb {
+            x_max,
+            x_min,
+            y_max,
+            y_min,
+        }
+    }
+    fn from_ballrefs(balls: &Vec<&Ball>) -> Aabb {
+        let mut x_max = -f64::INFINITY;
+        let mut x_min = f64::INFINITY;
+        let mut y_max = -f64::INFINITY;
+        let mut y_min = f64::INFINITY;
+
+        for ball in balls {
+            let aabb = ball.Aabb();
+            if aabb.x_max > x_max {
+                x_max = aabb.x_max;
+            }
+            if aabb.x_min < x_min {
+                x_min = aabb.x_min;
+            }
+            if aabb.y_max > y_max {
+                y_max = aabb.y_max;
+            }
+            if aabb.y_min < y_min {
+                y_min = aabb.y_min
+            }
+        }
+
+        Aabb {
+            x_max,
+            x_min,
+            y_max,
+            y_min,
+        }
     }
 }
 
@@ -199,6 +440,10 @@ impl Ball {
         }
         self.x += self.vel_x;
         self.y += self.vel_y;
+    }
+
+    fn Aabb(&self) -> Aabb {
+        Aabb::from_circle(self.x, self.y, self.size)
     }
 }
 
