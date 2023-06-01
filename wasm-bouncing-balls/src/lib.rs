@@ -140,95 +140,152 @@ fn update(balls: &mut RefMut<Vec<Ball>>) {
     ctx.set_stroke_style(&JsValue::from_str("rgba(0.0,255.0,255.0,0.2)"));
     ctx.set_line_width(2.0);
 
-    create_tree_x(ballrefs, &ctx);
+    let node = create_tree(ballrefs, &ctx, false);
+    let balls_with_possible_contact = get_contact_with(
+        node.left_child.as_ref().unwrap(),
+        node.right_child.as_ref().unwrap(),
+        Rc::new(RefCell::new(vec![])),
+    );
 
     for ball in balls.iter_mut() {
         ball.draw(&ctx);
         ball.moving(canvas.width() as f64, canvas.height() as f64);
     }
 }
-fn create_tree_x<'a>(balls: Vec<&'a Ball>, ctx: &'a CanvasRenderingContext2d) -> Node<'a> {
-    if balls.len() == 1 {
-        return Node {
-            left_child: None,
-            right_child: None,
-            balls,
-        };
+
+fn get_contact_with<'a>(
+    node: &Box<Node<'a>>,
+    other: &Box<Node<'a>>,
+    balls_with_possible_contact: Rc<RefCell<Vec<(&'a Ball, &'a Ball)>>>,
+) -> Vec<(&'a Ball, &'a Ball)> {
+    if !node.aabb.is_intersects(&other.aabb) {
+        return balls_with_possible_contact.borrow().clone();
     }
 
-    let aabb = Aabb::from_ballrefs(&balls);
-    draw_aabb(&ctx, &aabb);
+    if node.balls.len() == 1 && other.balls.len() == 1 {
+        balls_with_possible_contact
+            .borrow_mut()
+            .push((node.balls[0], other.balls[0]));
+        log(&format!(
+            "node: {:?},other:{:?}",
+            node.balls[0], other.balls[0]
+        ));
 
-    let mut left_balls: Vec<&Ball> = vec![];
-    let mut right_balls: Vec<&Ball> = vec![];
-    let mut center_balls: Vec<&Ball> = vec![];
+        {
+            let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
+            let ctx = canvas
+                .get_context("2d")
+                .unwrap()
+                .unwrap()
+                .dyn_into::<CanvasRenderingContext2d>()
+                .unwrap();
 
-    let parent_center_x = (aabb.x_max + aabb.x_min) / 2.0;
-
-    for ball in balls.iter() {
-        if ball.x < parent_center_x {
-            left_balls.push(ball.clone());
-        } else if ball.x > parent_center_x {
-            right_balls.push(ball.clone());
-        } else {
-            center_balls.push(ball.clone());
+            node.balls[0].draw(&ctx);
+            other.balls[0].draw(&ctx);
         }
+
+        panic!();
+
+        return balls_with_possible_contact.borrow().clone();
     }
 
-    for ball in center_balls {
-        if left_balls.len() <= right_balls.len() {
-            left_balls.push(ball);
-        } else {
-            right_balls.push(ball);
-        }
+    if node.balls.len() > 1 && (other.balls.len() == 1 || (node.aabb.size() >= other.aabb.size())) {
+        let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
+        let left_child_result = get_contact_with(
+            node.left_child.as_ref().unwrap(),
+            other,
+            balls_with_possible_contact_clone,
+        );
+
+        balls_with_possible_contact
+            .borrow_mut()
+            .extend(left_child_result);
+
+        let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
+
+        get_contact_with(
+            node.right_child.as_ref().unwrap(),
+            other,
+            balls_with_possible_contact_clone,
+        );
     }
 
-    let mut left_child = None;
-    let mut right_child = None;
+    if other.balls.len() > 1 && (node.balls.len() == 1 || (node.aabb.size() < other.aabb.size())) {
+        let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
 
-    if left_balls.len() > 0 {
-        left_child = Some(Box::new(create_tree_y(left_balls, &ctx)));
+        let other_left_child_result = get_contact_with(
+            node,
+            other.left_child.as_ref().unwrap(),
+            balls_with_possible_contact_clone,
+        );
+
+        balls_with_possible_contact
+            .borrow_mut()
+            .extend(other_left_child_result);
+
+        let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
+
+        get_contact_with(
+            node,
+            other.right_child.as_ref().unwrap(),
+            balls_with_possible_contact_clone,
+        );
     }
-    if right_balls.len() > 0 {
-        right_child = Some(Box::new(create_tree_y(right_balls, &ctx)));
-    }
 
-    let node = Node {
-        left_child,
-        right_child,
-        balls,
-    };
-
-    node
+    balls_with_possible_contact.borrow().clone()
 }
-fn create_tree_y<'a>(balls: Vec<&'a Ball>, ctx: &'a CanvasRenderingContext2d) -> Node<'a> {
+
+fn create_tree<'a>(
+    balls: Vec<&'a Ball>,
+    ctx: &'a CanvasRenderingContext2d,
+    y_axis_division: bool,
+) -> Node<'a> {
+    let aabb = Aabb::from_ballrefs(&balls);
+    draw_aabb(&ctx, &aabb);
+    //オブジェクト数が1つのAABBはそれ以上分類できないので決め打ちで葉要素として最終処理
     if balls.len() == 1 {
         return Node {
             left_child: None,
             right_child: None,
             balls,
+            aabb,
         };
     }
 
-    let aabb = Aabb::from_ballrefs(&balls);
-    draw_aabb(&ctx, &aabb);
-
+    //中点をAABBから取る関係上自身の軸サイズとAABBの軸サイズが一致すると右にも左にも分類できないオブジェクトが発生する
+    //例えば小さいオブジェクトが大きいオブジェクトの影に隠れる(同一y軸にはいる)形になると、大きいオブジェクトのmax_x,min_xがAABB全体のmax_x,min_xになってしまう
+    //そうしたときに間違って両方を同じサイドのchildに入れてしまうと無限ループが発生する(再帰呼び出しした先でも同じサイドのchildに入れられる)
     let mut left_balls: Vec<&Ball> = vec![];
     let mut right_balls: Vec<&Ball> = vec![];
     let mut center_balls: Vec<&Ball> = vec![];
 
-    let parent_center_y = (aabb.y_max + aabb.y_min) / 2.0;
+    //フラグで分割する軸を変更
+    if y_axis_division {
+        let parent_center_y = (aabb.y_max + aabb.y_min) / 2.0;
 
-    for ball in balls.iter() {
-        if ball.y < parent_center_y {
-            left_balls.push(ball.clone());
-        } else if ball.y > parent_center_y {
-            right_balls.push(ball.clone());
-        } else {
-            center_balls.push(ball.clone());
+        for ball in balls.iter() {
+            if ball.y < parent_center_y {
+                left_balls.push(ball.clone());
+            } else if ball.y > parent_center_y {
+                right_balls.push(ball.clone());
+            } else {
+                center_balls.push(ball.clone());
+            }
+        }
+    } else {
+        let parent_center_x = (aabb.x_max + aabb.x_min) / 2.0;
+        for ball in balls.iter() {
+            if ball.x < parent_center_x {
+                left_balls.push(ball.clone());
+            } else if ball.x > parent_center_x {
+                right_balls.push(ball.clone());
+            } else {
+                center_balls.push(ball.clone());
+            }
         }
     }
 
+    //分類できないオブジェクトは、左右のchildを見て少ない方に入れることでオブジェクト数が2つだけのAABBになった場合のループを回避する
     for ball in center_balls {
         if left_balls.len() <= right_balls.len() {
             left_balls.push(ball);
@@ -241,16 +298,18 @@ fn create_tree_y<'a>(balls: Vec<&'a Ball>, ctx: &'a CanvasRenderingContext2d) ->
     let mut right_child = None;
 
     if left_balls.len() > 0 {
-        left_child = Some(Box::new(create_tree_x(left_balls, &ctx)));
+        //次回の分割方向は今回とは別の軸を使う(!y_axis_division)
+        left_child = Some(Box::new(create_tree(left_balls, &ctx, !y_axis_division)));
     }
     if right_balls.len() > 0 {
-        right_child = Some(Box::new(create_tree_x(right_balls, &ctx)));
+        right_child = Some(Box::new(create_tree(right_balls, &ctx, !y_axis_division)));
     }
 
     let node = Node {
         left_child,
         right_child,
         balls,
+        aabb,
     };
 
     node
@@ -260,6 +319,7 @@ struct Node<'a> {
     left_child: Option<Box<Node<'a>>>,
     right_child: Option<Box<Node<'a>>>,
     balls: Vec<&'a Ball>,
+    aabb: Aabb,
 }
 
 fn draw_aabb(ctx: &CanvasRenderingContext2d, aabb: &Aabb) {
@@ -345,7 +405,7 @@ impl Aabb {
         let mut y_min = f64::INFINITY;
 
         for ball in balls {
-            let aabb = ball.Aabb();
+            let aabb = ball.aabb();
             if aabb.x_max > x_max {
                 x_max = aabb.x_max;
             }
@@ -374,7 +434,7 @@ impl Aabb {
         let mut y_min = f64::INFINITY;
 
         for ball in balls {
-            let aabb = ball.Aabb();
+            let aabb = ball.aabb();
             if aabb.x_max > x_max {
                 x_max = aabb.x_max;
             }
@@ -396,8 +456,32 @@ impl Aabb {
             y_min,
         }
     }
-}
 
+    fn is_intersects(&self, other: &Aabb) -> bool {
+        if self.x_min > other.x_max {
+            return false;
+        }
+        if self.x_max < other.x_min {
+            return false;
+        }
+        if self.y_min > other.y_max {
+            return false;
+        }
+        if self.y_max < other.y_min {
+            return false;
+        }
+
+        return true;
+    }
+
+    fn size(&self) -> f64 {
+        let x_size = self.x_max - self.x_min;
+        let y_size = self.y_max - self.y_min;
+
+        x_size + y_size
+    }
+}
+#[derive(Debug)]
 struct Ball {
     x: f64,
     y: f64,
@@ -442,7 +526,7 @@ impl Ball {
         self.y += self.vel_y;
     }
 
-    fn Aabb(&self) -> Aabb {
+    fn aabb(&self) -> Aabb {
         Aabb::from_circle(self.x, self.y, self.size)
     }
 }
