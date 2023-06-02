@@ -140,12 +140,17 @@ fn update(balls: &mut RefMut<Vec<Ball>>) {
     ctx.set_stroke_style(&JsValue::from_str("rgba(0.0,255.0,255.0,0.2)"));
     ctx.set_line_width(2.0);
 
-    let node = create_tree(ballrefs, &ctx, false);
+    let loot_node = create_tree(ballrefs, &ctx, false);
     let balls_with_possible_contact = get_contact_with(
-        node.left_child.as_ref().unwrap(),
-        node.right_child.as_ref().unwrap(),
+        loot_node.left_child.as_ref().unwrap(),
+        loot_node.right_child.as_ref().unwrap(),
         Rc::new(RefCell::new(vec![])),
     );
+
+    log(&format!(
+        "collision_count:{}",
+        balls_with_possible_contact.len()
+    ));
 
     for ball in balls.iter_mut() {
         ball.draw(&ctx);
@@ -159,17 +164,35 @@ fn get_contact_with<'a>(
     balls_with_possible_contact: Rc<RefCell<Vec<(&'a Ball, &'a Ball)>>>,
 ) -> Vec<(&'a Ball, &'a Ball)> {
     if !node.aabb.is_intersects(&other.aabb) {
+        if node.balls.len() > 1 {
+            get_contact_with(
+                node.left_child.as_ref().unwrap(),
+                node.right_child.as_ref().unwrap(),
+                balls_with_possible_contact.clone(),
+            );
+        }
+        if other.balls.len() > 1 {
+            get_contact_with(
+                other.left_child.as_ref().unwrap(),
+                other.right_child.as_ref().unwrap(),
+                balls_with_possible_contact.clone(),
+            );
+        }
+
         return balls_with_possible_contact.borrow().clone();
     }
 
+    //接触
     if node.balls.len() == 1 && other.balls.len() == 1 {
         balls_with_possible_contact
             .borrow_mut()
             .push((node.balls[0], other.balls[0]));
-        log(&format!(
-            "node: {:?},other:{:?}",
-            node.balls[0], other.balls[0]
-        ));
+        // log(&format!(
+        //     "node:{:?},other:{:?},contact_list_ren:{}",
+        //     node.balls[0].name,
+        //     other.balls[0].name,
+        //     balls_with_possible_contact.borrow().len()
+        // ));
 
         {
             let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
@@ -182,9 +205,12 @@ fn get_contact_with<'a>(
 
             node.balls[0].draw(&ctx);
             other.balls[0].draw(&ctx);
-        }
 
-        panic!();
+            ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,0.0,0.0,1)"));
+            ctx.set_line_width(4.0);
+
+            draw_aabb(&ctx, &Aabb::from_aabbs(vec![node.aabb, other.aabb]));
+        }
 
         return balls_with_possible_contact.borrow().clone();
     }
@@ -197,9 +223,9 @@ fn get_contact_with<'a>(
             balls_with_possible_contact_clone,
         );
 
-        balls_with_possible_contact
-            .borrow_mut()
-            .extend(left_child_result);
+        // balls_with_possible_contact
+        //     .borrow_mut()
+        //     .extend(left_child_result);
 
         let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
 
@@ -219,9 +245,9 @@ fn get_contact_with<'a>(
             balls_with_possible_contact_clone,
         );
 
-        balls_with_possible_contact
-            .borrow_mut()
-            .extend(other_left_child_result);
+        // balls_with_possible_contact
+        //     .borrow_mut()
+        //     .extend(other_left_child_result);
 
         let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
 
@@ -252,7 +278,7 @@ fn create_tree<'a>(
         };
     }
 
-    //中点をAABBから取る関係上自身の軸サイズとAABBの軸サイズが一致すると右にも左にも分類できないオブジェクトが発生する
+    //中点をAABBから取る関係上自身の軸サイズと自身が所属するAABBの軸サイズが一致すると右にも左にも分類できないオブジェクトが発生する
     //例えば小さいオブジェクトが大きいオブジェクトの影に隠れる(同一y軸にはいる)形になると、大きいオブジェクトのmax_x,min_xがAABB全体のmax_x,min_xになってしまう
     //そうしたときに間違って両方を同じサイドのchildに入れてしまうと無限ループが発生する(再帰呼び出しした先でも同じサイドのchildに入れられる)
     let mut left_balls: Vec<&Ball> = vec![];
@@ -338,7 +364,7 @@ fn balls_init(balls_rc: &Rc<RefCell<Vec<Ball>>>, balls_size: i32) {
     let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
     balls_rc.borrow_mut().clear();
 
-    for _ in 0..balls_size {
+    for i in 0..balls_size {
         let size = random_f64(5.0, 40.0);
         let ball = Ball::new(
             random_f64(0.0 + size, canvas.width() as f64 - size),
@@ -347,12 +373,14 @@ fn balls_init(balls_rc: &Rc<RefCell<Vec<Ball>>>, balls_size: i32) {
             random_f64(-2.0, 2.0),
             &random_rgb(),
             size,
+            i,
         );
 
         balls_rc.borrow_mut().push(ball);
     }
 }
 
+#[derive(Clone, Copy)]
 struct Aabb {
     x_max: f64,
     x_min: f64,
@@ -489,9 +517,10 @@ struct Ball {
     vel_y: f64,
     color: String,
     size: f64,
+    name: i32,
 }
 impl Ball {
-    fn new(x: f64, y: f64, vel_x: f64, vel_y: f64, color: &str, size: f64) -> Ball {
+    fn new(x: f64, y: f64, vel_x: f64, vel_y: f64, color: &str, size: f64, name: i32) -> Ball {
         Ball {
             x,
             y,
@@ -499,6 +528,7 @@ impl Ball {
             vel_y,
             color: color.to_string(),
             size,
+            name,
         }
     }
     fn draw(&self, ctx: &CanvasRenderingContext2d) {
