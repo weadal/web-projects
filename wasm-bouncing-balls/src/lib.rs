@@ -140,17 +140,27 @@ fn update(balls: &mut RefMut<Vec<Ball>>) {
     ctx.set_stroke_style(&JsValue::from_str("rgba(0.0,255.0,255.0,0.2)"));
     ctx.set_line_width(2.0);
 
-    let loot_node = create_tree(ballrefs, &ctx, false);
-    let balls_with_possible_contact = get_contact_with(
-        loot_node.left_child.as_ref().unwrap(),
-        loot_node.right_child.as_ref().unwrap(),
-        Rc::new(RefCell::new(vec![])),
-    );
+    let loot_node = create_tree(ballrefs.clone(), &ctx, false);
+    // let balls_with_possible_contact = get_contact_with(
+    //     loot_node.left_child.as_ref().unwrap(),
+    //     loot_node.right_child.as_ref().unwrap(),
+    //     Rc::new(RefCell::new(vec![])),
+    // );
+
+    let loot_node_box = Box::new(loot_node);
+    let balls_with_possible_contact: Rc<RefCell<Vec<(&Ball, &Ball)>>> =
+        Rc::new(RefCell::new(vec![]));
+
+    for ball in balls.iter() {
+        get_contact_with(&ball, &loot_node_box, balls_with_possible_contact.clone());
+    }
 
     log(&format!(
-        "collision_count:{}",
-        balls_with_possible_contact.len()
+        "collision_count:{:?}",
+        balls_with_possible_contact.borrow().len()
     ));
+
+    //ここで狭域当たり判定
 
     for ball in balls.iter_mut() {
         ball.draw(&ctx);
@@ -158,21 +168,22 @@ fn update(balls: &mut RefMut<Vec<Ball>>) {
     }
 }
 
-fn get_contact_with<'a>(
+//トップダウンでツリーすべてを走査する(先に作った方の)やつ
+fn get_contact_with_top_down<'a>(
     node: &Box<Node<'a>>,
     other: &Box<Node<'a>>,
     balls_with_possible_contact: Rc<RefCell<Vec<(&'a Ball, &'a Ball)>>>,
 ) -> Vec<(&'a Ball, &'a Ball)> {
     if !node.aabb.is_intersects(&other.aabb) {
         if node.balls.len() > 1 {
-            get_contact_with(
+            get_contact_with_top_down(
                 node.left_child.as_ref().unwrap(),
                 node.right_child.as_ref().unwrap(),
                 balls_with_possible_contact.clone(),
             );
         }
         if other.balls.len() > 1 {
-            get_contact_with(
+            get_contact_with_top_down(
                 other.left_child.as_ref().unwrap(),
                 other.right_child.as_ref().unwrap(),
                 balls_with_possible_contact.clone(),
@@ -217,7 +228,7 @@ fn get_contact_with<'a>(
 
     if node.balls.len() > 1 && (other.balls.len() == 1 || (node.aabb.size() >= other.aabb.size())) {
         let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
-        let left_child_result = get_contact_with(
+        let left_child_result = get_contact_with_top_down(
             node.left_child.as_ref().unwrap(),
             other,
             balls_with_possible_contact_clone,
@@ -229,7 +240,7 @@ fn get_contact_with<'a>(
 
         let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
 
-        get_contact_with(
+        get_contact_with_top_down(
             node.right_child.as_ref().unwrap(),
             other,
             balls_with_possible_contact_clone,
@@ -239,7 +250,7 @@ fn get_contact_with<'a>(
     if other.balls.len() > 1 && (node.balls.len() == 1 || (node.aabb.size() < other.aabb.size())) {
         let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
 
-        let other_left_child_result = get_contact_with(
+        let other_left_child_result = get_contact_with_top_down(
             node,
             other.left_child.as_ref().unwrap(),
             balls_with_possible_contact_clone,
@@ -251,7 +262,7 @@ fn get_contact_with<'a>(
 
         let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
 
-        get_contact_with(
+        get_contact_with_top_down(
             node,
             other.right_child.as_ref().unwrap(),
             balls_with_possible_contact_clone,
@@ -261,6 +272,76 @@ fn get_contact_with<'a>(
     balls_with_possible_contact.borrow().clone()
 }
 
+fn get_contact_with<'a>(
+    ball: &'a Ball,
+    node: &Box<Node<'a>>,
+    balls_with_possible_contact: Rc<RefCell<Vec<(&'a Ball, &'a Ball)>>>,
+) -> Vec<(&'a Ball, &'a Ball)> {
+    let ball_aabb = Aabb::from_circle(ball.x, ball.y, ball.size);
+
+    //接触なし
+    if !ball_aabb.is_intersects(&node.aabb) {
+        return balls_with_possible_contact.borrow().clone();
+    }
+
+    //接触
+    if node.balls.len() == 1 {
+        if node.balls[0].id <= ball.id {
+            return balls_with_possible_contact.borrow().clone();
+        }
+
+        balls_with_possible_contact
+            .borrow_mut()
+            .push((ball, node.balls[0]));
+
+        // log(&format!(
+        //     "node:{:?},other:{:?},contact_list_ren:{}",
+        //     node.balls[0].name,
+        //     other.balls[0].name,
+        //     balls_with_possible_contact.borrow().len()
+        // ));
+
+        {
+            let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
+            let ctx = canvas
+                .get_context("2d")
+                .unwrap()
+                .unwrap()
+                .dyn_into::<CanvasRenderingContext2d>()
+                .unwrap();
+
+            ball.draw(&ctx);
+            node.balls[0].draw(&ctx);
+
+            ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,0.0,0.0,1)"));
+            ctx.set_line_width(4.0);
+
+            draw_aabb(&ctx, &Aabb::from_aabbs(vec![ball_aabb, node.aabb]));
+        }
+
+        return balls_with_possible_contact.borrow().clone();
+    }
+
+    if node.balls.len() > 1 {
+        let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
+
+        get_contact_with(
+            ball,
+            node.left_child.as_ref().unwrap(),
+            balls_with_possible_contact_clone,
+        );
+
+        let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
+
+        get_contact_with(
+            ball,
+            node.right_child.as_ref().unwrap(),
+            balls_with_possible_contact_clone,
+        );
+    }
+
+    balls_with_possible_contact.borrow().clone()
+}
 fn create_tree<'a>(
     balls: Vec<&'a Ball>,
     ctx: &'a CanvasRenderingContext2d,
@@ -365,7 +446,7 @@ fn balls_init(balls_rc: &Rc<RefCell<Vec<Ball>>>, balls_size: i32) {
     balls_rc.borrow_mut().clear();
 
     for i in 0..balls_size {
-        let size = random_f64(5.0, 40.0);
+        let size = random_f64(5.0, 30.0);
         let ball = Ball::new(
             random_f64(0.0 + size, canvas.width() as f64 - size),
             random_f64(0.0 + size, canvas.height() as f64 - size),
@@ -380,7 +461,7 @@ fn balls_init(balls_rc: &Rc<RefCell<Vec<Ball>>>, balls_size: i32) {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Aabb {
     x_max: f64,
     x_min: f64,
@@ -517,10 +598,10 @@ struct Ball {
     vel_y: f64,
     color: String,
     size: f64,
-    name: i32,
+    id: i32,
 }
 impl Ball {
-    fn new(x: f64, y: f64, vel_x: f64, vel_y: f64, color: &str, size: f64, name: i32) -> Ball {
+    fn new(x: f64, y: f64, vel_x: f64, vel_y: f64, color: &str, size: f64, id: i32) -> Ball {
         Ball {
             x,
             y,
@@ -528,7 +609,7 @@ impl Ball {
             vel_y,
             color: color.to_string(),
             size,
-            name,
+            id,
         }
     }
     fn draw(&self, ctx: &CanvasRenderingContext2d) {
