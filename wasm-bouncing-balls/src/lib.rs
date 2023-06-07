@@ -10,8 +10,8 @@ use html_cast::*;
 use js_sys::Math;
 use wasm_bindgen::prelude::*;
 use web_sys::{
-    CanvasRenderingContext2d, Event, HtmlButtonElement, HtmlCanvasElement, HtmlInputElement,
-    HtmlParagraphElement, Performance,
+    console, CanvasRenderingContext2d, Event, HtmlButtonElement, HtmlCanvasElement,
+    HtmlInputElement, HtmlParagraphElement, Performance,
 };
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
@@ -140,7 +140,12 @@ fn update(balls: &mut RefMut<Vec<Ball>>) {
     ctx.set_stroke_style(&JsValue::from_str("rgba(0.0,255.0,255.0,0.2)"));
     ctx.set_line_width(2.0);
 
+    let _timer = Timer::new("create_tree");
+
     let loot_node = create_tree(ballrefs.clone(), &ctx, false);
+
+    drop(_timer);
+
     // let balls_with_possible_contact = get_contact_with(
     //     loot_node.left_child.as_ref().unwrap(),
     //     loot_node.right_child.as_ref().unwrap(),
@@ -151,14 +156,25 @@ fn update(balls: &mut RefMut<Vec<Ball>>) {
     let balls_with_possible_contact: Rc<RefCell<Vec<(&Ball, &Ball)>>> =
         Rc::new(RefCell::new(vec![]));
 
-    for ball in balls.iter() {
-        get_contact_with(&ball, &loot_node_box, balls_with_possible_contact.clone());
+    {
+        let _timer = Timer::new("get_contact_with");
+        for ball in balls.iter() {
+            get_contact_with(&ball, &loot_node_box, balls_with_possible_contact.clone());
+        }
     }
 
     log(&format!(
         "collision_count:{:?}",
         balls_with_possible_contact.borrow().len()
     ));
+
+    ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,0.0,0.0,1)"));
+    ctx.set_line_width(4.0);
+
+    for balls in balls_with_possible_contact.borrow().iter() {
+        let aabb = Aabb::from_ballrefs(&vec![balls.0, balls.1]);
+        draw_aabb(&ctx, &aabb);
+    }
 
     //ここで狭域当たり判定
 
@@ -276,71 +292,40 @@ fn get_contact_with<'a>(
     ball: &'a Ball,
     node: &Box<Node<'a>>,
     balls_with_possible_contact: Rc<RefCell<Vec<(&'a Ball, &'a Ball)>>>,
-) -> Vec<(&'a Ball, &'a Ball)> {
+) {
     let ball_aabb = Aabb::from_circle(ball.x, ball.y, ball.size);
 
     //接触なし
     if !ball_aabb.is_intersects(&node.aabb) {
-        return balls_with_possible_contact.borrow().clone();
+        return;
     }
 
     //接触
     if node.balls.len() == 1 {
         if node.balls[0].id <= ball.id {
-            return balls_with_possible_contact.borrow().clone();
+            return;
         }
 
         balls_with_possible_contact
             .borrow_mut()
             .push((ball, node.balls[0]));
 
-        // log(&format!(
-        //     "node:{:?},other:{:?},contact_list_ren:{}",
-        //     node.balls[0].name,
-        //     other.balls[0].name,
-        //     balls_with_possible_contact.borrow().len()
-        // ));
-
-        {
-            let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
-            let ctx = canvas
-                .get_context("2d")
-                .unwrap()
-                .unwrap()
-                .dyn_into::<CanvasRenderingContext2d>()
-                .unwrap();
-
-            ball.draw(&ctx);
-            node.balls[0].draw(&ctx);
-
-            ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,0.0,0.0,1)"));
-            ctx.set_line_width(4.0);
-
-            draw_aabb(&ctx, &Aabb::from_aabbs(vec![ball_aabb, node.aabb]));
-        }
-
-        return balls_with_possible_contact.borrow().clone();
+        return;
     }
-
-    if node.balls.len() > 1 {
-        let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
-
+    //リーフノードでない場合、再帰的にツリーを降下する
+    else if node.balls.len() > 1 {
         get_contact_with(
             ball,
             node.left_child.as_ref().unwrap(),
-            balls_with_possible_contact_clone,
+            balls_with_possible_contact.clone(),
         );
-
-        let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
 
         get_contact_with(
             ball,
             node.right_child.as_ref().unwrap(),
-            balls_with_possible_contact_clone,
+            balls_with_possible_contact,
         );
     }
-
-    balls_with_possible_contact.borrow().clone()
 }
 fn create_tree<'a>(
     balls: Vec<&'a Ball>,
@@ -446,7 +431,7 @@ fn balls_init(balls_rc: &Rc<RefCell<Vec<Ball>>>, balls_size: i32) {
     balls_rc.borrow_mut().clear();
 
     for i in 0..balls_size {
-        let size = random_f64(5.0, 30.0);
+        let size = random_f64(5.0, 10.0);
         let ball = Ball::new(
             random_f64(0.0 + size, canvas.width() as f64 - size),
             random_f64(0.0 + size, canvas.height() as f64 - size),
@@ -722,5 +707,21 @@ impl Fps {
             )
             .trim(),
         );
+    }
+}
+
+//生成時からDropまでにかかった時間を測定するタイマー web_sys::consoleの出力を使ってるのでブラウザのコンソールに表示される
+pub struct Timer<'a> {
+    name: &'a str,
+}
+impl<'a> Timer<'a> {
+    pub fn new(name: &'a str) -> Timer<'a> {
+        console::time_with_label(name);
+        Timer { name }
+    }
+}
+impl<'a> Drop for Timer<'a> {
+    fn drop(&mut self) {
+        console::time_end_with_label(self.name);
     }
 }
