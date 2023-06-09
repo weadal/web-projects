@@ -352,49 +352,11 @@ fn get_contact_with<'a>(
     }
     //リーフノードでない場合、再帰的にツリーを降下する
     else if node.balls.len() > 1 {
-        if let None = node.left_child.as_ref() {
-            let balls = node.right_child.as_ref().unwrap().balls.clone();
-            let parent_center_x = ((node.aabb.x_max + node.aabb.x_min) / 2.0) as u32;
-            let parent_center_y = ((node.aabb.y_max + node.aabb.y_min) / 2.0) as u32;
-
-            log(&format!("ball0 x:{},y:{}", balls[0].x, balls[0].y));
-            log(&format!("ball1 x:{},y:{}", balls[1].x, balls[1].y));
-            log(&format!(
-                "parent_center x:{},y:{}",
-                parent_center_x, parent_center_y
-            ));
-
-            panic!()
-        }
-
         get_contact_with(
             ball,
             node.left_child.as_ref().unwrap(),
             balls_with_possible_contact.clone(),
         );
-
-        if let None = node.right_child.as_ref() {
-            let balls = node.left_child.as_ref().unwrap().balls.clone();
-            let parent_center_x = ((node.aabb.x_max.round() + node.aabb.x_min.round()) / 2.0);
-            let parent_center_y = ((node.aabb.y_max.round() + node.aabb.y_min.round()) / 2.0);
-            log(&format!("balls.len:{}", balls.len()));
-            log(&format!(
-                "ball0 x:{},y:{}",
-                balls[0].x.round(),
-                balls[0].y.round()
-            ));
-            log(&format!(
-                "ball1 x:{},y:{}",
-                balls[1].x.round(),
-                balls[1].y.round()
-            ));
-            log(&format!(
-                "parent_center x:{},y:{}",
-                parent_center_x, parent_center_y
-            ));
-
-            panic!()
-        }
 
         get_contact_with(
             ball,
@@ -456,28 +418,6 @@ fn create_tree<'a>(
                 center_balls.push(ball.clone());
             }
         }
-    }
-
-    if (left_balls.len() == 2 || right_balls.len() == 2) && balls.len() == 2 {
-        let parent_center_x = ((aabb.x_max.round() + aabb.x_min.round()) / 2.0);
-        let parent_center_y = ((aabb.y_max.round() + aabb.y_min.round()) / 2.0);
-
-        log(&format!(
-            "ball0 x:{},y:{}",
-            balls[0].x.round(),
-            balls[0].y.round()
-        ));
-        log(&format!(
-            "ball1 x:{},y:{}",
-            balls[1].x.round(),
-            balls[1].y.round()
-        ));
-
-        log(&format!(
-            "parent_center x:{},y:{}",
-            parent_center_x, parent_center_y
-        ));
-        panic!()
     }
 
     //分類できないオブジェクトは、左右のchildを見て少ない方に入れることでオブジェクト数が2つだけのAABBになった場合のループを回避する
