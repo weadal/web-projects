@@ -1,9 +1,3 @@
-pub mod draw_old;
-pub mod game_loop;
-pub mod structs;
-pub mod systems;
-pub mod user_consts;
-
 mod html_cast;
 mod utils;
 use std::{
@@ -14,14 +8,10 @@ use std::{
 
 use html_cast::*;
 use js_sys::Math;
-use structs::ecs::World;
-use systems::*;
-use utils::*;
 use wasm_bindgen::prelude::*;
-
 use web_sys::{
-    console, CanvasRenderingContext2d, DomRect, HtmlButtonElement, HtmlCanvasElement,
-    HtmlInputElement, HtmlParagraphElement, MouseEvent, Performance,
+    console, CanvasRenderingContext2d, Event, HtmlButtonElement, HtmlCanvasElement,
+    HtmlInputElement, HtmlParagraphElement, Performance,
 };
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
@@ -44,44 +34,13 @@ extern "C" {
 #[wasm_bindgen]
 pub fn start() -> Result<(), JsValue> {
     utils::set_panic_hook();
-    let input = Rc::new(RefCell::new(Input::new()));
-
-    //canvas設定
 
     let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
 
-    let width = 960;
+    let width = 960.0;
     canvas.set_width(width as u32);
-    let height = 720;
+    let height = 720.0;
     canvas.set_height(height as u32);
-
-    //canvasが存在する矩形領域を取得する
-    let bounding_rect = canvas.get_bounding_client_rect();
-
-    //縮小や拡大などされているかもしれないので相対スケールを確保しておく
-    let scale_x = canvas.width() as f64 / bounding_rect.width();
-    let scale_y = canvas.height() as f64 / bounding_rect.height();
-
-    let input_clone = input.clone();
-
-    //canvas上をクリックすることでキャンバス上の座標を取得するイベントハンドラ
-    let closure = Closure::wrap(Box::new(move |e: MouseEvent| {
-        //クリックされた絶対位置から矩形領域の位置を引いてローカル座標を取得する また、相対スケールも掛けておく
-        let local_x = (e.client_x() as f64 - bounding_rect.left()) * scale_x;
-        let local_y = (e.client_y() as f64 - bounding_rect.top()) * scale_y;
-
-        input_clone.borrow_mut().click_x = Some(local_x);
-        input_clone.borrow_mut().click_y = Some(local_y);
-
-        log(&format!("click! local_x:{},local_y:{}", local_x, local_y));
-    }) as Box<dyn FnMut(_)>);
-
-    canvas
-        .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
-        .unwrap();
-    closure.forget();
-
-    //canvas設定ここまで
 
     let balls: Vec<Ball> = Vec::new();
     let balls_rc = Rc::new(RefCell::new(balls));
@@ -94,12 +53,15 @@ pub fn start() -> Result<(), JsValue> {
 
     balls_init(&balls_rc, balls_size);
 
-    let input_clone = input.clone();
+    let is_playing_rc = Rc::new(RefCell::new(true));
+
     //一時停止ボタン
     {
         let play_button = query_selector_to::<HtmlButtonElement>(".play-pause").unwrap();
-        let closure: Closure<dyn FnMut()> =
-            Closure::new(move || input_clone.borrow_mut().toggle_is_playing());
+        let is_playing_rc_clone = is_playing_rc.clone();
+        let closure: Closure<dyn FnMut()> = Closure::new(move || {
+            play_pause(&is_playing_rc_clone);
+        });
         play_button
             .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
             .unwrap();
@@ -124,34 +86,23 @@ pub fn start() -> Result<(), JsValue> {
         closure.forget();
     }
 
-    main_loop(balls_rc.clone(), input.clone());
+    main_loop(balls_rc.clone(), &is_playing_rc);
 
     Ok(())
 }
 
-fn main_loop(balls_rc: Rc<RefCell<Vec<Ball>>>, input: Rc<RefCell<Input>>) {
+fn main_loop(balls_rc: Rc<RefCell<Vec<Ball>>>, is_playing_rc: &Rc<RefCell<bool>>) {
     let closure: Rc<RefCell<Option<Closure<dyn FnMut()>>>> = Rc::new(RefCell::new(None));
     let closure_clone = closure.clone();
 
     let mut fps = Fps::new();
 
-    input.borrow_mut().is_playing = true;
-
-    let mut world = World::new();
-
-    let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
-    world.consts.canvas_x = canvas.width();
-    world.consts.canvas_y = canvas.height();
-
-    sys_main::create_ball(&mut world);
-
-    let input_rc_clone = input.clone();
+    let is_playing_rc_clone = is_playing_rc.clone();
     *closure_clone.borrow_mut() = Some(Closure::new(move || {
-        if input_rc_clone.borrow().is_playing {
-            update(&mut balls_rc.borrow_mut(), &mut world);
-            game_loop::tick(&mut world);
+        if *is_playing_rc_clone.borrow() {
+            update(&mut balls_rc.borrow_mut());
+
             fps.render();
-            world.consts.delta_time = fps.delta_time;
         }
         request_animation_frame(&closure);
     }));
@@ -159,7 +110,17 @@ fn main_loop(balls_rc: Rc<RefCell<Vec<Ball>>>, input: Rc<RefCell<Input>>) {
     request_animation_frame(&closure_clone);
 }
 
-fn update(balls: &mut RefMut<Vec<Ball>>, world: &mut World) {
+fn play_pause(is_playing_rc: &Rc<RefCell<bool>>) {
+    let state = is_playing_rc.borrow().clone();
+
+    if state {
+        *is_playing_rc.borrow_mut() = false;
+    } else {
+        *is_playing_rc.borrow_mut() = true;
+    }
+}
+
+fn update(balls: &mut RefMut<Vec<Ball>>) {
     let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
     let ctx = canvas
         .get_context("2d")
@@ -179,7 +140,11 @@ fn update(balls: &mut RefMut<Vec<Ball>>, world: &mut World) {
     ctx.set_stroke_style(&JsValue::from_str("rgba(0.0,255.0,255.0,0.2)"));
     ctx.set_line_width(2.0);
 
+    let _timer = Timer::new("create_tree");
+
     let loot_node = create_tree(ballrefs.clone(), &ctx, false);
+
+    drop(_timer);
 
     // let balls_with_possible_contact = get_contact_with(
     //     loot_node.left_child.as_ref().unwrap(),
@@ -191,9 +156,17 @@ fn update(balls: &mut RefMut<Vec<Ball>>, world: &mut World) {
     let balls_with_possible_contact: Rc<RefCell<Vec<(&Ball, &Ball)>>> =
         Rc::new(RefCell::new(vec![]));
 
-    for ball in balls.iter() {
-        get_contact_with(&ball, &loot_node_box, balls_with_possible_contact.clone());
+    {
+        let _timer = Timer::new("get_contact_with");
+        for ball in balls.iter() {
+            get_contact_with(&ball, &loot_node_box, balls_with_possible_contact.clone());
+        }
     }
+
+    log(&format!(
+        "collision_count:{:?}",
+        balls_with_possible_contact.borrow().len()
+    ));
 
     ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,0.0,0.0,1)"));
     ctx.set_line_width(4.0);
@@ -205,21 +178,10 @@ fn update(balls: &mut RefMut<Vec<Ball>>, world: &mut World) {
 
     //ここで狭域当たり判定
 
-    let delta_time = world.consts.delta_time;
-
     for ball in balls.iter_mut() {
         ball.draw(&ctx);
-        ball.moving(canvas.width() as f64, canvas.height() as f64, &delta_time);
+        ball.moving(canvas.width() as f64, canvas.height() as f64);
     }
-
-    let a = world.entities.get_alive_entities().unwrap();
-    let b = world.position.get(&a[0]).unwrap();
-
-    ctx.begin_path();
-    ctx.set_fill_style(&JsValue::from_str("rgba(255.0,255.0,0.0,1)"));
-    ctx.arc(b.x, b.y, 10.0, 0.0, 2.0 * std::f64::consts::PI)
-        .unwrap();
-    ctx.fill();
 }
 
 //トップダウンでツリーすべてを走査する(先に作った方の)やつ
@@ -352,49 +314,11 @@ fn get_contact_with<'a>(
     }
     //リーフノードでない場合、再帰的にツリーを降下する
     else if node.balls.len() > 1 {
-        if let None = node.left_child.as_ref() {
-            let balls = node.right_child.as_ref().unwrap().balls.clone();
-            let parent_center_x = ((node.aabb.x_max + node.aabb.x_min) / 2.0) as u32;
-            let parent_center_y = ((node.aabb.y_max + node.aabb.y_min) / 2.0) as u32;
-
-            log(&format!("ball0 x:{},y:{}", balls[0].x, balls[0].y));
-            log(&format!("ball1 x:{},y:{}", balls[1].x, balls[1].y));
-            log(&format!(
-                "parent_center x:{},y:{}",
-                parent_center_x, parent_center_y
-            ));
-
-            panic!()
-        }
-
         get_contact_with(
             ball,
             node.left_child.as_ref().unwrap(),
             balls_with_possible_contact.clone(),
         );
-
-        if let None = node.right_child.as_ref() {
-            let balls = node.left_child.as_ref().unwrap().balls.clone();
-            let parent_center_x = ((node.aabb.x_max.round() + node.aabb.x_min.round()) / 2.0);
-            let parent_center_y = ((node.aabb.y_max.round() + node.aabb.y_min.round()) / 2.0);
-            log(&format!("balls.len:{}", balls.len()));
-            log(&format!(
-                "ball0 x:{},y:{}",
-                balls[0].x.round(),
-                balls[0].y.round()
-            ));
-            log(&format!(
-                "ball1 x:{},y:{}",
-                balls[1].x.round(),
-                balls[1].y.round()
-            ));
-            log(&format!(
-                "parent_center x:{},y:{}",
-                parent_center_x, parent_center_y
-            ));
-
-            panic!()
-        }
 
         get_contact_with(
             ball,
@@ -423,7 +347,6 @@ fn create_tree<'a>(
     //中点をAABBから取る関係上自身の軸サイズと自身が所属するAABBの軸サイズが一致すると右にも左にも分類できないオブジェクトが発生する
     //例えば小さいオブジェクトが大きいオブジェクトの影に隠れる(同一y軸にはいる)形になると、大きいオブジェクトのmax_x,min_xがAABB全体のmax_x,min_xになってしまう
     //そうしたときに間違って両方を同じサイドのchildに入れてしまうと無限ループが発生する(再帰呼び出しした先でも同じサイドのchildに入れられる)
-    //丸め誤差対策のために中心から+-0.5の範囲をセンターに入れてしまう 近接領域の当たりで多少の誤差が発生するけど1ピクセルより小さい領域での話なので事実上誤差は無いものとできるはず
     let mut left_balls: Vec<&Ball> = vec![];
     let mut right_balls: Vec<&Ball> = vec![];
     let mut center_balls: Vec<&Ball> = vec![];
@@ -433,9 +356,7 @@ fn create_tree<'a>(
         let parent_center_y = (aabb.y_max + aabb.y_min) / 2.0;
 
         for ball in balls.iter() {
-            if ball.y < parent_center_y + 0.5 && ball.y > parent_center_y - 0.5 {
-                center_balls.push(ball.clone());
-            } else if ball.y < parent_center_y {
+            if ball.y < parent_center_y {
                 left_balls.push(ball.clone());
             } else if ball.y > parent_center_y {
                 right_balls.push(ball.clone());
@@ -446,9 +367,7 @@ fn create_tree<'a>(
     } else {
         let parent_center_x = (aabb.x_max + aabb.x_min) / 2.0;
         for ball in balls.iter() {
-            if ball.x < parent_center_x + 0.5 && ball.x > parent_center_x - 0.5 {
-                center_balls.push(ball.clone());
-            } else if ball.x < parent_center_x {
+            if ball.x < parent_center_x {
                 left_balls.push(ball.clone());
             } else if ball.x > parent_center_x {
                 right_balls.push(ball.clone());
@@ -456,28 +375,6 @@ fn create_tree<'a>(
                 center_balls.push(ball.clone());
             }
         }
-    }
-
-    if (left_balls.len() == 2 || right_balls.len() == 2) && balls.len() == 2 {
-        let parent_center_x = ((aabb.x_max.round() + aabb.x_min.round()) / 2.0);
-        let parent_center_y = ((aabb.y_max.round() + aabb.y_min.round()) / 2.0);
-
-        log(&format!(
-            "ball0 x:{},y:{}",
-            balls[0].x.round(),
-            balls[0].y.round()
-        ));
-        log(&format!(
-            "ball1 x:{},y:{}",
-            balls[1].x.round(),
-            balls[1].y.round()
-        ));
-
-        log(&format!(
-            "parent_center x:{},y:{}",
-            parent_center_x, parent_center_y
-        ));
-        panic!()
     }
 
     //分類できないオブジェクトは、左右のchildを見て少ない方に入れることでオブジェクト数が2つだけのAABBになった場合のループを回避する
@@ -708,28 +605,123 @@ impl Ball {
         ctx.fill();
     }
 
-    fn moving(&mut self, canvas_width: f64, canvas_height: f64, delta_time: &f64) {
+    fn moving(&mut self, canvas_width: f64, canvas_height: f64) {
         if self.x + self.size >= canvas_width {
-            self.x = canvas_width - self.size;
             self.vel_x = -self.vel_x;
         }
         if self.x - self.size <= 0.0 {
-            self.x = self.size;
             self.vel_x = -self.vel_x;
         }
         if self.y + self.size >= canvas_height {
-            self.y = canvas_height - self.size;
             self.vel_y = -self.vel_y;
         }
         if self.y - self.size <= 0.0 {
-            self.y = self.size;
             self.vel_y = -self.vel_y;
         }
-        self.x += self.vel_x * delta_time / 20.0;
-        self.y += self.vel_y * delta_time / 20.0;
+        self.x += self.vel_x;
+        self.y += self.vel_y;
     }
 
     fn aabb(&self) -> Aabb {
         Aabb::from_circle(self.x, self.y, self.size)
+    }
+}
+
+fn random_f64(min: f64, max: f64) -> f64 {
+    Math::floor(Math::random() * (max - min + 1.0) as f64) + min
+}
+fn random_rgb() -> String {
+    format!(
+        "rgb({},{},{})",
+        random_f64(0.0, 255.0) as u32,
+        random_f64(0.0, 255.0) as u32,
+        random_f64(0.0, 255.0) as u32
+    )
+}
+
+fn request_animation_frame(closure_rc: &Rc<RefCell<Option<Closure<dyn FnMut()>>>>) -> i32 {
+    web_sys::window()
+        .unwrap()
+        .request_animation_frame(
+            closure_rc
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unchecked_ref(),
+        )
+        .unwrap()
+}
+
+struct Fps {
+    body: HtmlParagraphElement,
+    frames: Vec<f64>,
+    performance: web_sys::Performance,
+    last_frame_timestamp: f64,
+}
+impl Fps {
+    fn new() -> Fps {
+        let body = query_selector_to::<HtmlParagraphElement>(".fps-counter").unwrap();
+        let frames: Vec<f64> = vec![];
+        let performance = web_sys::window().unwrap().performance().unwrap();
+        let last_frame_timestamp = performance.now();
+
+        Fps {
+            body,
+            frames,
+            performance,
+            last_frame_timestamp,
+        }
+    }
+
+    fn render(&mut self) {
+        let now = self.performance.now();
+        let delta = now - self.last_frame_timestamp;
+        self.last_frame_timestamp = now;
+
+        let fps = 1000.0 / delta;
+
+        self.frames.push(fps);
+        if self.frames.len() > 100 {
+            self.frames.remove(0);
+        }
+
+        let mut min = f64::INFINITY;
+        let mut max = -f64::INFINITY;
+        let mut sum = 0.0;
+
+        for i in 0..self.frames.len() {
+            sum += self.frames[i];
+            min = Math::min(min, self.frames[i]);
+            max = Math::max(max, self.frames[i]);
+        }
+
+        let mean = sum / self.frames.len() as f64;
+        self.body.set_inner_html(
+            &format!(
+                "fps counter<br>latest = {}<br>avg of last 100 = {}<br>min of last 100 = {}<br>max of last 100 = {}",
+                Math::round(fps),
+                Math::round(mean),
+                Math::round(min),
+                Math::round(max)
+            )
+            .trim(),
+        );
+    }
+}
+
+//生成時からDropまでにかかった時間を測定するタイマー web_sys::consoleの出力を使ってるのでブラウザのコンソールに表示される
+pub struct Timer<'a> {
+    name: &'a str,
+}
+impl<'a> Timer<'a> {
+    pub fn new(name: &'a str) -> Timer<'a> {
+        console::time_with_label(name);
+        Timer { name }
+    }
+}
+impl<'a> Drop for Timer<'a> {
+    fn drop(&mut self) {
+        console::time_end_with_label(self.name);
     }
 }
