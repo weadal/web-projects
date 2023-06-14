@@ -124,6 +124,22 @@ pub fn start() -> Result<(), JsValue> {
         closure.forget();
     }
 
+    let input_clone = input.clone();
+    //ウィンドウの最小化時など画面が完全に隠れたときににポーズするように
+    //これやっとかないとポーズしてないままロジックが止まってdelta_timeの異常加算から挙動がおかしくなる
+    {
+        let window = web_sys::window().unwrap();
+        let doc = window.document().unwrap();
+
+        let closure: Closure<dyn FnMut()> = Closure::new(move || {
+            input_clone.borrow_mut().is_playing = false;
+            log("pause");
+        });
+        doc.add_event_listener_with_callback("visibilitychange", closure.as_ref().unchecked_ref())
+            .unwrap();
+        closure.forget();
+    }
+
     main_loop(balls_rc.clone(), input.clone());
 
     Ok(())
@@ -150,9 +166,9 @@ fn main_loop(balls_rc: Rc<RefCell<Vec<Ball>>>, input: Rc<RefCell<Input>>) {
         if input_rc_clone.borrow().is_playing {
             update(&mut balls_rc.borrow_mut(), &mut world);
             game_loop::tick(&mut world);
-            fps.render();
-            world.consts.delta_time = fps.delta_time;
         }
+        fps.render();
+        world.consts.delta_time = fps.delta_time;
         request_animation_frame(&closure);
     }));
 
@@ -209,7 +225,11 @@ fn update(balls: &mut RefMut<Vec<Ball>>, world: &mut World) {
 
     for ball in balls.iter_mut() {
         ball.draw(&ctx);
-        ball.moving(canvas.width() as f64, canvas.height() as f64, &delta_time);
+        ball.moving(
+            world.consts.canvas_x as f64,
+            world.consts.canvas_y as f64,
+            &delta_time,
+        );
     }
 
     let a = world.entities.get_alive_entities().unwrap();
@@ -220,110 +240,6 @@ fn update(balls: &mut RefMut<Vec<Ball>>, world: &mut World) {
     ctx.arc(b.x, b.y, 10.0, 0.0, 2.0 * std::f64::consts::PI)
         .unwrap();
     ctx.fill();
-}
-
-//トップダウンでツリーすべてを走査する(先に作った方の)やつ
-fn get_contact_with_top_down<'a>(
-    node: &Box<Node<'a>>,
-    other: &Box<Node<'a>>,
-    balls_with_possible_contact: Rc<RefCell<Vec<(&'a Ball, &'a Ball)>>>,
-) -> Vec<(&'a Ball, &'a Ball)> {
-    if !node.aabb.is_intersects(&other.aabb) {
-        if node.balls.len() > 1 {
-            get_contact_with_top_down(
-                node.left_child.as_ref().unwrap(),
-                node.right_child.as_ref().unwrap(),
-                balls_with_possible_contact.clone(),
-            );
-        }
-        if other.balls.len() > 1 {
-            get_contact_with_top_down(
-                other.left_child.as_ref().unwrap(),
-                other.right_child.as_ref().unwrap(),
-                balls_with_possible_contact.clone(),
-            );
-        }
-
-        return balls_with_possible_contact.borrow().clone();
-    }
-
-    //接触
-    if node.balls.len() == 1 && other.balls.len() == 1 {
-        balls_with_possible_contact
-            .borrow_mut()
-            .push((node.balls[0], other.balls[0]));
-        // log(&format!(
-        //     "node:{:?},other:{:?},contact_list_ren:{}",
-        //     node.balls[0].name,
-        //     other.balls[0].name,
-        //     balls_with_possible_contact.borrow().len()
-        // ));
-
-        {
-            let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
-            let ctx = canvas
-                .get_context("2d")
-                .unwrap()
-                .unwrap()
-                .dyn_into::<CanvasRenderingContext2d>()
-                .unwrap();
-
-            node.balls[0].draw(&ctx);
-            other.balls[0].draw(&ctx);
-
-            ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,0.0,0.0,1)"));
-            ctx.set_line_width(4.0);
-
-            draw_aabb(&ctx, &Aabb::from_aabbs(vec![node.aabb, other.aabb]));
-        }
-
-        return balls_with_possible_contact.borrow().clone();
-    }
-
-    if node.balls.len() > 1 && (other.balls.len() == 1 || (node.aabb.size() >= other.aabb.size())) {
-        let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
-        let left_child_result = get_contact_with_top_down(
-            node.left_child.as_ref().unwrap(),
-            other,
-            balls_with_possible_contact_clone,
-        );
-
-        // balls_with_possible_contact
-        //     .borrow_mut()
-        //     .extend(left_child_result);
-
-        let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
-
-        get_contact_with_top_down(
-            node.right_child.as_ref().unwrap(),
-            other,
-            balls_with_possible_contact_clone,
-        );
-    }
-
-    if other.balls.len() > 1 && (node.balls.len() == 1 || (node.aabb.size() < other.aabb.size())) {
-        let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
-
-        let other_left_child_result = get_contact_with_top_down(
-            node,
-            other.left_child.as_ref().unwrap(),
-            balls_with_possible_contact_clone,
-        );
-
-        // balls_with_possible_contact
-        //     .borrow_mut()
-        //     .extend(other_left_child_result);
-
-        let balls_with_possible_contact_clone = balls_with_possible_contact.clone();
-
-        get_contact_with_top_down(
-            node,
-            other.right_child.as_ref().unwrap(),
-            balls_with_possible_contact_clone,
-        );
-    }
-
-    balls_with_possible_contact.borrow().clone()
 }
 
 fn get_contact_with<'a>(
