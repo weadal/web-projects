@@ -121,7 +121,7 @@ pub fn ball_collision(w: &mut World) {
         }
     }
 
-    let mut checked_ball: &usize;
+    let mut checked_ball: &EntityId;
 
     //ここからマルチスレッドにしたいけどとりあえずシングルでのみ考える
 
@@ -129,7 +129,7 @@ pub fn ball_collision(w: &mut World) {
         let ball_pos = w.position.get_unchecked(ball_id).clone();
 
         let ball_scale = w.scale.get_unchecked(ball_id).clone();
-        let mut hit_entities: Vec<usize> = vec![];
+        let mut hit_entities: Vec<EntityId> = vec![];
 
         checked_ball = ball_id;
 
@@ -152,7 +152,7 @@ pub fn ball_collision(w: &mut World) {
             if distance.sqr_magnitude() <= (ball_scale / 2.0 + ball_scale / 2.0).powf(2.0) {
                 //衝突したentityをバッファに書き込む
 
-                let str = format!("id:{0} がid:{1} に衝突", ball_id, target_id);
+                let str = format!("id:{:?} がid:{:?} に衝突", ball_id.0, target_id.0);
                 send_scroll_message(w, &str);
 
                 hit_entities.push(*target_id);
@@ -172,7 +172,7 @@ pub fn ball_collision(w: &mut World) {
 }
 
 pub struct Collider {
-    id: usize,
+    id: EntityId,
     group: usize,
     grid: usize,
     position: Vector2,
@@ -221,12 +221,12 @@ pub fn collision(w: &mut World) {
         }
     }
 
-    let mut checked_id: usize;
+    let mut checked_id: EntityId;
 
     //ここからマルチスレッドにしたいけどとりあえずシングルでのみ考える
 
     for collider in colliders.iter() {
-        let mut hit_entities: Vec<usize> = vec![];
+        let mut hit_entities: Vec<EntityId> = vec![];
 
         checked_id = collider.id;
 
@@ -250,7 +250,7 @@ pub fn collision(w: &mut World) {
             if distance.sqr_magnitude() <= (collider.scale / 2.0 + target.scale / 2.0).powf(2.0) {
                 //衝突したentityをバッファに書き込む
 
-                let str = format!("id:{0} がid:{1} に衝突", collider.id, target.id);
+                let str = format!("id:{:?} がid:{:?} に衝突", collider.id, target.id);
                 send_scroll_message(w, &str);
 
                 hit_entities.push(target.id);
@@ -297,14 +297,14 @@ pub fn ball_dead(w: &mut World) {
             for target_id in targets.iter() {
                 w.remove_entity(target_id);
 
-                let str = format!("衝突対象のid:{}を破棄", target_id);
+                let str = format!("衝突対象のid:{:?}を破棄", target_id);
                 send_scroll_message(w, &str);
             }
 
             //最後に自分を破棄
             w.remove_entity(entity_id);
 
-            let str = format!("衝突後のid:{}を破棄", entity_id);
+            let str = format!("衝突後のid:{:?}を破棄", entity_id);
             send_scroll_message(w, &str);
 
             return;
@@ -317,7 +317,7 @@ pub fn ball_dead(w: &mut World) {
         {
             w.remove_entity(entity_id);
 
-            let str = format!("フィールド外に落ちたid:{}を破棄", entity_id);
+            let str = format!("フィールド外に落ちたid:{:?}を破棄", entity_id);
             send_scroll_message(w, &str);
         }
     }
@@ -416,7 +416,7 @@ pub fn update_static_message(w: &mut World) {
     w.system_message.set(&entities[0], strvec);
 }
 
-pub fn create_bullet(w: &mut World, parent_id: &usize) {
+pub fn create_bullet(w: &mut World, parent_id: &EntityId) {
     let id = w.entities.instantiate_entity();
     let entity = w.entities.get_mut(&id).unwrap();
 
@@ -439,7 +439,7 @@ pub fn create_bullet(w: &mut World, parent_id: &usize) {
     w.scale.reserve(entity, BULLET_SIZE);
 }
 
-pub fn create_aim_bullet(w: &mut World, parent_id: &usize, direction: &Vector2) {
+pub fn create_aim_bullet(w: &mut World, parent_id: &EntityId, direction: &Vector2) {
     let id = w.entities.instantiate_entity();
     let entity = w.entities.get_mut(&id).unwrap();
 
@@ -459,7 +459,7 @@ pub fn create_aim_bullet(w: &mut World, parent_id: &usize, direction: &Vector2) 
     w.collider_target.reserve(entity, vec![]);
     w.scale.reserve(entity, BULLET_SIZE);
 }
-pub fn create_bullet_8way(w: &mut World, parent_id: &usize) {
+pub fn create_bullet_8way(w: &mut World, parent_id: &EntityId) {
     let mut angle = 0.0;
 
     for _ in 0..8 {
@@ -487,10 +487,10 @@ pub fn create_bullet_8way(w: &mut World, parent_id: &usize) {
     }
 }
 
-pub fn nearest_target(w: &World, self_id: &usize, group: &usize) -> Option<(usize, Vector2)> {
+pub fn nearest_target(w: &World, self_id: &EntityId, group: &usize) -> Option<(EntityId, Vector2)> {
     let position = w.position.get(self_id).unwrap().clone();
     let mut nearest_distance = std::f64::MAX;
-    let mut nearest_target_tupple: Option<(usize, Vector2)> = None;
+    let mut nearest_target_tupple: Option<(EntityId, Vector2)> = None;
 
     for value in w.position.items.iter() {
         if value.id == *self_id {
@@ -517,12 +517,12 @@ pub fn nearest_target(w: &World, self_id: &usize, group: &usize) -> Option<(usiz
     nearest_target_tupple
 }
 
-pub fn collect_entities_from_archetype(w: &World, values: &[usize]) -> Vec<usize> {
+pub fn collect_entities_from_archetype(w: &World, values: &[ComponentId]) -> Vec<EntityId> {
     let arche = EntytyArcheType::create_archetype(values);
     w.entities.get_entities_from_archetype(&arche)
 }
 
-pub fn collect_entities_from_group(w: &World, group_id: &usize) -> Vec<usize> {
+pub fn collect_entities_from_group(w: &World, group_id: &usize) -> Vec<EntityId> {
     let mut group_entities = vec![];
 
     for entity in w.entities.entities.iter() {

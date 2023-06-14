@@ -3,18 +3,25 @@ use crate::user_consts::MAX_COMPONENTS;
 
 use std::collections::HashMap;
 
+use std::ops::Deref;
 use std::vec;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct EntityId(pub usize);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ComponentId(pub usize);
 
 #[derive(Clone, Debug)]
 pub struct EntytyArcheType {
-    pub components: Vec<usize>,
+    pub components: Vec<ComponentId>,
 }
 impl EntytyArcheType {
     pub fn create_empty() -> EntytyArcheType {
         EntytyArcheType { components: vec![] }
     }
 
-    pub fn create_archetype(values: &[usize]) -> EntytyArcheType {
+    pub fn create_archetype(values: &[ComponentId]) -> EntytyArcheType {
         let mut vec = vec![];
 
         for value in values {
@@ -54,7 +61,7 @@ impl EntytyArcheType {
         false
     }
 
-    pub fn is_component_include(&self, ref_id: usize) -> bool {
+    pub fn is_component_include(&self, ref_id: ComponentId) -> bool {
         for component in self.components.iter() {
             if ref_id == *component {
                 return true;
@@ -66,7 +73,7 @@ impl EntytyArcheType {
 
 #[derive(Clone)]
 pub struct Entity {
-    pub id: usize,
+    pub id: EntityId,
     pub archetype: EntytyArcheType,
 }
 
@@ -74,16 +81,16 @@ pub struct EntityManager {
     pub entities: Vec<Option<Entity>>,
 }
 impl EntityManager {
-    pub fn instantiate_entity(&mut self) -> usize {
+    pub fn instantiate_entity(&mut self) -> EntityId {
         //破棄されたentityがあればそこに追加
         for (index, entity) in self.entities.iter().enumerate() {
             if let None = entity {
                 self.entities[index] = Some(Entity {
-                    id: index,
+                    id: EntityId(index),
                     archetype: EntytyArcheType::create_empty(),
                 });
 
-                return index;
+                return EntityId(index);
             }
         }
 
@@ -92,17 +99,17 @@ impl EntityManager {
         let entity_id = self.entities.len();
 
         self.entities.push(Some(Entity {
-            id: entity_id,
+            id: EntityId(entity_id),
             archetype: EntytyArcheType::create_empty(),
         }));
 
-        entity_id
+        EntityId(entity_id)
     }
-    pub fn get_mut(&mut self, id: &usize) -> Option<&mut Entity> {
-        self.entities[*id].as_mut()
+    pub fn get_mut(&mut self, id: &EntityId) -> Option<&mut Entity> {
+        self.entities[id.0].as_mut()
     }
 
-    pub fn get_entities_from_archetype(&self, ref_archetype: &EntytyArcheType) -> Vec<usize> {
+    pub fn get_entities_from_archetype(&self, ref_archetype: &EntytyArcheType) -> Vec<EntityId> {
         let mut entities = vec![];
 
         //存在するentityをすべて見ていく
@@ -134,7 +141,7 @@ impl EntityManager {
         count
     }
 
-    pub fn get_alive_entities(&self) -> Option<Vec<usize>> {
+    pub fn get_alive_entities(&self) -> Option<Vec<EntityId>> {
         let mut entities = vec![];
         for entity in self.entities.iter() {
             if let Some(value) = entity {
@@ -149,23 +156,23 @@ impl EntityManager {
         None
     }
 
-    fn remove(&mut self, entity_id: &usize) {
-        self.entities[*entity_id] = None;
+    fn remove(&mut self, entity_id: &EntityId) {
+        self.entities[entity_id.0] = None;
     }
 }
 
 pub struct CompItem<T> {
-    pub id: usize,
+    pub id: EntityId,
     pub item: T,
 }
 
 pub struct Component<TestCompItem> {
-    id: usize,
-    id_index_map: HashMap<usize, usize>,
+    id: ComponentId,
+    id_index_map: HashMap<EntityId, usize>,
     pub items: Vec<TestCompItem>,
 }
 impl<T> Component<CompItem<T>> {
-    pub fn get(&self, entity_id: &usize) -> Option<&T> {
+    pub fn get(&self, entity_id: &EntityId) -> Option<&T> {
         let index = self.id_index_map.get(entity_id);
 
         match index {
@@ -174,7 +181,7 @@ impl<T> Component<CompItem<T>> {
         }
     }
 
-    pub fn get_mut(&mut self, entity_id: &usize) -> Option<&mut T> {
+    pub fn get_mut(&mut self, entity_id: &EntityId) -> Option<&mut T> {
         let index = self.id_index_map.get(entity_id);
 
         match index {
@@ -183,11 +190,11 @@ impl<T> Component<CompItem<T>> {
         }
     }
 
-    pub fn get_unchecked(&self, entity_id: &usize) -> &T {
+    pub fn get_unchecked(&self, entity_id: &EntityId) -> &T {
         let index = self.id_index_map.get(entity_id);
         &self.items[*index.unwrap()].item
     }
-    pub fn get_unchecked_mut(&mut self, entity_id: &usize) -> &mut T {
+    pub fn get_unchecked_mut(&mut self, entity_id: &EntityId) -> &mut T {
         let index = self.id_index_map.get(entity_id);
         &mut self.items[*index.unwrap()].item
     }
@@ -206,7 +213,7 @@ impl<T> Component<CompItem<T>> {
         return Some(&mut self.items[index].item);
     }
 
-    pub fn set(&mut self, entity_id: &usize, value: T) {
+    pub fn set(&mut self, entity_id: &EntityId, value: T) {
         let index = self.id_index_map.get(&entity_id);
         if let Some(v) = index {
             self.items[*v].item = value;
@@ -214,13 +221,13 @@ impl<T> Component<CompItem<T>> {
         }
 
         panic!(
-            "存在しないidが渡されました:{} index:{}",
+            "存在しないidが渡されました:{:?} index:{}",
             entity_id,
             index.unwrap()
         )
     }
 
-    fn push_default(&mut self, entity_id: usize) -> usize
+    fn push_default(&mut self, entity_id: EntityId) -> usize
     where
         T: Default,
     {
@@ -231,7 +238,7 @@ impl<T> Component<CompItem<T>> {
 
         self.items.len() - 1
     }
-    fn push_with_item(&mut self, entity_id: usize, item: T) -> usize {
+    fn push_with_item(&mut self, entity_id: EntityId, item: T) -> usize {
         self.items.push(CompItem {
             id: entity_id,
             item: (item),
@@ -289,12 +296,12 @@ impl<T> Component<CompItem<T>> {
 
     fn new(id: Option<usize>) -> Self {
         Component {
-            id: id.unwrap(),
+            id: ComponentId(id.unwrap()),
             id_index_map: HashMap::new(),
             items: vec![],
         }
     }
-    pub fn id(&self) -> usize {
+    pub fn id(&self) -> ComponentId {
         self.id
     }
 }
@@ -307,12 +314,12 @@ pub struct World {
     pub velocity: Component<CompItem<Vector2>>,
     pub scale: Component<CompItem<f64>>,
     pub draw_icon: Component<CompItem<&'static str>>,
-    pub collider_target: Component<CompItem<Vec<usize>>>,
+    pub collider_target: Component<CompItem<Vec<EntityId>>>,
     pub group: Component<CompItem<usize>>,
     pub timer_time: Component<CompItem<f64>>,
     pub timer_alarm: Component<CompItem<Vec<f64>>>,
     pub system_message: Component<CompItem<Vec<String>>>,
-    pub parent: Component<CompItem<usize>>,
+    pub parent: Component<CompItem<EntityId>>,
 }
 impl World {
     pub fn new() -> Self {
@@ -335,7 +342,7 @@ impl World {
         }
     }
 
-    fn remove_from_entity(&mut self, entity_id: &usize) {
+    fn remove_from_entity(&mut self, entity_id: &EntityId) {
         let entity = self.entities.get_mut(entity_id);
         if let None = entity {
             return;
@@ -357,7 +364,7 @@ impl World {
         //....
     }
 
-    pub fn remove_entity(&mut self, entity_id: &usize) {
+    pub fn remove_entity(&mut self, entity_id: &EntityId) {
         self.remove_from_entity(entity_id);
         self.entities.remove(entity_id);
     }
