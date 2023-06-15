@@ -1,5 +1,7 @@
 use std::sync::mpsc::Sender;
 
+use wasm_bindgen::JsValue;
+
 use crate::{
     draw_old::{DrawAddress, DrawMap},
     structs::ecs::*,
@@ -45,4 +47,9 @@ pub fn create_draw_map(w: &mut World, tx: &mut Sender<DrawMap>) {
         }
     }
     tx.send(drawmap).unwrap();
+}
+
+pub struct DrawParamater {
+    color: JsValue,
+    size: f64,
 }

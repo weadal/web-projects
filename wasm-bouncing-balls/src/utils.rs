@@ -3,6 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use crate::html_cast::*;
 use js_sys::Math;
 
+use crate::*;
 use wasm_bindgen::prelude::*;
 use web_sys::{console, HtmlParagraphElement};
 
@@ -133,11 +134,146 @@ impl<'a> Drop for Timer<'a> {
 pub fn random_f64(min: f64, max: f64) -> f64 {
     Math::floor(Math::random() * (max - min + 1.0) as f64) + min
 }
-pub fn random_rgb() -> String {
-    format!(
+pub fn random_rgb() -> JsValue {
+    let str = format!(
         "rgb({},{},{})",
         random_f64(0.0, 255.0) as u32,
         random_f64(0.0, 255.0) as u32,
         random_f64(0.0, 255.0) as u32
-    )
+    );
+    JsValue::from_str(&str)
+}
+pub fn js_color_rgba(r: f64, g: f64, b: f64, a: f64) -> JsValue {
+    let str = format!("rgba({},{},{},{})", r, g, b, a);
+    JsValue::from_str(&str)
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Aabb {
+    pub x_max: f64,
+    pub x_min: f64,
+    pub y_max: f64,
+    pub y_min: f64,
+}
+impl Aabb {
+    pub fn from_circle(x: f64, y: f64, size: f64) -> Aabb {
+        Aabb {
+            x_max: x + size,
+            x_min: x - size,
+            y_max: y + size,
+            y_min: y - size,
+        }
+    }
+
+    pub fn from_aabbs(aabbs: Vec<Aabb>) -> Aabb {
+        let mut x_max = -f64::INFINITY;
+        let mut x_min = f64::INFINITY;
+        let mut y_max = -f64::INFINITY;
+        let mut y_min = f64::INFINITY;
+
+        for aabb in aabbs {
+            if aabb.x_max > x_max {
+                x_max = aabb.x_max;
+            }
+            if aabb.x_min < x_min {
+                x_min = aabb.x_min;
+            }
+            if aabb.y_max > y_max {
+                y_max = aabb.y_max;
+            }
+            if aabb.y_min < y_min {
+                y_min = aabb.y_min
+            }
+        }
+
+        Aabb {
+            x_max,
+            x_min,
+            y_max,
+            y_min,
+        }
+    }
+
+    pub fn from_balls(balls: &Vec<Ball>) -> Aabb {
+        let mut x_max = -f64::INFINITY;
+        let mut x_min = f64::INFINITY;
+        let mut y_max = -f64::INFINITY;
+        let mut y_min = f64::INFINITY;
+
+        for ball in balls {
+            let aabb = ball.aabb();
+            if aabb.x_max > x_max {
+                x_max = aabb.x_max;
+            }
+            if aabb.x_min < x_min {
+                x_min = aabb.x_min;
+            }
+            if aabb.y_max > y_max {
+                y_max = aabb.y_max;
+            }
+            if aabb.y_min < y_min {
+                y_min = aabb.y_min
+            }
+        }
+
+        Aabb {
+            x_max,
+            x_min,
+            y_max,
+            y_min,
+        }
+    }
+    pub fn from_ballrefs(balls: &Vec<&Ball>) -> Aabb {
+        let mut x_max = -f64::INFINITY;
+        let mut x_min = f64::INFINITY;
+        let mut y_max = -f64::INFINITY;
+        let mut y_min = f64::INFINITY;
+
+        for ball in balls {
+            let aabb = ball.aabb();
+            if aabb.x_max > x_max {
+                x_max = aabb.x_max;
+            }
+            if aabb.x_min < x_min {
+                x_min = aabb.x_min;
+            }
+            if aabb.y_max > y_max {
+                y_max = aabb.y_max;
+            }
+            if aabb.y_min < y_min {
+                y_min = aabb.y_min
+            }
+        }
+
+        Aabb {
+            x_max,
+            x_min,
+            y_max,
+            y_min,
+        }
+    }
+
+    pub fn is_intersects(&self, other: &Aabb) -> bool {
+        if self.x_min > other.x_max {
+            return false;
+        }
+        if self.x_max < other.x_min {
+            return false;
+        }
+        if self.y_min > other.y_max {
+            return false;
+        }
+        if self.y_max < other.y_min {
+            return false;
+        }
+
+        return true;
+    }
+
+    pub fn size(&self) -> f64 {
+        let x_size = self.x_max - self.x_min;
+        let y_size = self.y_max - self.y_min;
+
+        x_size + y_size
+    }
 }

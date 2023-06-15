@@ -184,7 +184,7 @@ fn update(balls: &mut RefMut<Vec<Ball>>, world: &mut World) {
         .dyn_into::<CanvasRenderingContext2d>()
         .unwrap();
 
-    ctx.set_fill_style(&JsValue::from_str("rgba(0,0,0,1)"));
+    ctx.set_fill_style(&js_color_rgba(0.0, 0.0, 0.0, 1.0));
     ctx.fill_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
 
     let mut ballrefs: Vec<&Ball> = vec![];
@@ -396,7 +396,7 @@ fn balls_init(balls_rc: &Rc<RefCell<Vec<Ball>>>, balls_size: i32) {
             random_f64(0.0 + size, canvas.height() as f64 - size),
             random_f64(-2.0, 2.0),
             random_f64(-2.0, 2.0),
-            &random_rgb(),
+            random_rgb(),
             size,
             i,
         );
@@ -405,160 +405,31 @@ fn balls_init(balls_rc: &Rc<RefCell<Vec<Ball>>>, balls_size: i32) {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-struct Aabb {
-    x_max: f64,
-    x_min: f64,
-    y_max: f64,
-    y_min: f64,
-}
-impl Aabb {
-    fn from_circle(x: f64, y: f64, size: f64) -> Aabb {
-        Aabb {
-            x_max: x + size,
-            x_min: x - size,
-            y_max: y + size,
-            y_min: y - size,
-        }
-    }
-
-    fn from_aabbs(aabbs: Vec<Aabb>) -> Aabb {
-        let mut x_max = -f64::INFINITY;
-        let mut x_min = f64::INFINITY;
-        let mut y_max = -f64::INFINITY;
-        let mut y_min = f64::INFINITY;
-
-        for aabb in aabbs {
-            if aabb.x_max > x_max {
-                x_max = aabb.x_max;
-            }
-            if aabb.x_min < x_min {
-                x_min = aabb.x_min;
-            }
-            if aabb.y_max > y_max {
-                y_max = aabb.y_max;
-            }
-            if aabb.y_min < y_min {
-                y_min = aabb.y_min
-            }
-        }
-
-        Aabb {
-            x_max,
-            x_min,
-            y_max,
-            y_min,
-        }
-    }
-
-    fn from_balls(balls: &Vec<Ball>) -> Aabb {
-        let mut x_max = -f64::INFINITY;
-        let mut x_min = f64::INFINITY;
-        let mut y_max = -f64::INFINITY;
-        let mut y_min = f64::INFINITY;
-
-        for ball in balls {
-            let aabb = ball.aabb();
-            if aabb.x_max > x_max {
-                x_max = aabb.x_max;
-            }
-            if aabb.x_min < x_min {
-                x_min = aabb.x_min;
-            }
-            if aabb.y_max > y_max {
-                y_max = aabb.y_max;
-            }
-            if aabb.y_min < y_min {
-                y_min = aabb.y_min
-            }
-        }
-
-        Aabb {
-            x_max,
-            x_min,
-            y_max,
-            y_min,
-        }
-    }
-    fn from_ballrefs(balls: &Vec<&Ball>) -> Aabb {
-        let mut x_max = -f64::INFINITY;
-        let mut x_min = f64::INFINITY;
-        let mut y_max = -f64::INFINITY;
-        let mut y_min = f64::INFINITY;
-
-        for ball in balls {
-            let aabb = ball.aabb();
-            if aabb.x_max > x_max {
-                x_max = aabb.x_max;
-            }
-            if aabb.x_min < x_min {
-                x_min = aabb.x_min;
-            }
-            if aabb.y_max > y_max {
-                y_max = aabb.y_max;
-            }
-            if aabb.y_min < y_min {
-                y_min = aabb.y_min
-            }
-        }
-
-        Aabb {
-            x_max,
-            x_min,
-            y_max,
-            y_min,
-        }
-    }
-
-    fn is_intersects(&self, other: &Aabb) -> bool {
-        if self.x_min > other.x_max {
-            return false;
-        }
-        if self.x_max < other.x_min {
-            return false;
-        }
-        if self.y_min > other.y_max {
-            return false;
-        }
-        if self.y_max < other.y_min {
-            return false;
-        }
-
-        return true;
-    }
-
-    fn size(&self) -> f64 {
-        let x_size = self.x_max - self.x_min;
-        let y_size = self.y_max - self.y_min;
-
-        x_size + y_size
-    }
-}
 #[derive(Debug)]
 struct Ball {
     x: f64,
     y: f64,
     vel_x: f64,
     vel_y: f64,
-    color: String,
+    color: JsValue,
     size: f64,
     id: i32,
 }
 impl Ball {
-    fn new(x: f64, y: f64, vel_x: f64, vel_y: f64, color: &str, size: f64, id: i32) -> Ball {
+    fn new(x: f64, y: f64, vel_x: f64, vel_y: f64, color: JsValue, size: f64, id: i32) -> Ball {
         Ball {
             x,
             y,
             vel_x,
             vel_y,
-            color: color.to_string(),
+            color,
             size,
             id,
         }
     }
     fn draw(&self, ctx: &CanvasRenderingContext2d) {
         ctx.begin_path();
-        ctx.set_fill_style(&JsValue::from_str(&self.color));
+        ctx.set_fill_style(&self.color);
         ctx.arc(self.x, self.y, self.size, 0.0, 2.0 * std::f64::consts::PI)
             .unwrap();
         ctx.fill();

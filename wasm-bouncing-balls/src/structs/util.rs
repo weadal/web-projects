@@ -8,8 +8,11 @@ pub struct Vector2 {
 }
 
 impl Vector2 {
-    pub fn new() -> Vector2 {
-        Vector2 { x: (0.0), y: (0.0) }
+    pub fn new(x: f64, y: f64) -> Vector2 {
+        Vector2 { x, y }
+    }
+    pub fn zero() -> Vector2 {
+        Vector2 { x: 0.0, y: 0.0 }
     }
 
     pub fn add(&mut self, v2: Vector2) {
@@ -34,7 +37,7 @@ impl Vector2 {
 
         //ゼロ除算回避
         if length <= 0.0 {
-            return Vector2::new();
+            return Vector2::zero();
         }
 
         Vector2 {
