@@ -159,7 +159,9 @@ fn main_loop(balls_rc: Rc<RefCell<Vec<Ball>>>, input: Rc<RefCell<Input>>) {
     world.consts.canvas_x = canvas.width();
     world.consts.canvas_y = canvas.height();
 
-    sys_main::create_ball(&mut world);
+    for _ in 0..25 {
+        sys_main::create_ball(&mut world);
+    }
 
     let input_rc_clone = input.clone();
     *closure_clone.borrow_mut() = Some(Closure::new(move || {
@@ -231,15 +233,6 @@ fn update(balls: &mut RefMut<Vec<Ball>>, world: &mut World) {
             &delta_time,
         );
     }
-
-    let a = world.entities.get_alive_entities().unwrap();
-    let b = world.position.get(&a[0]).unwrap();
-
-    ctx.begin_path();
-    ctx.set_fill_style(&JsValue::from_str("rgba(255.0,255.0,0.0,1)"));
-    ctx.arc(b.x, b.y, 10.0, 0.0, 2.0 * std::f64::consts::PI)
-        .unwrap();
-    ctx.fill();
 }
 
 fn get_contact_with<'a>(
@@ -406,7 +399,7 @@ fn balls_init(balls_rc: &Rc<RefCell<Vec<Ball>>>, balls_size: i32) {
 }
 
 #[derive(Debug)]
-struct Ball {
+pub struct Ball {
     x: f64,
     y: f64,
     vel_x: f64,

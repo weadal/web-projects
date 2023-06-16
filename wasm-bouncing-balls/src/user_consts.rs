@@ -25,7 +25,7 @@ pub mod group {
 pub const MAX_COMPONENTS: usize = 100;
 pub const MAX_SCROLL_MESSAGE: usize = 20;
 pub const MAX_STATIC_MESSAGE: usize = 10;
-pub const BALL_SIZE: f64 = 0.2;
+pub const BALL_SIZE: f64 = 20.0;
 pub const BULLET_SIZE: f64 = 0.1;
 pub const BULLET_FIRE_SPAN: f64 = 0.091;
 pub const BALL_SPAWN_SPAN: f64 = 0.5;

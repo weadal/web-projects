@@ -1,4 +1,6 @@
 use crate::structs::util::*;
+use crate::systems::sys_collision::Collider;
+use crate::systems::sys_draw::DrawParamater;
 use crate::user_consts::MAX_COMPONENTS;
 
 use std::collections::HashMap;
@@ -309,16 +311,15 @@ impl<T> Component<CompItem<T>> {
 pub struct World {
     pub consts: WorldConsts,
     pub entities: EntityManager,
-    pub is_alive: Component<CompItem<bool>>,
     pub position: Component<CompItem<Vector2>>,
     pub velocity: Component<CompItem<Vector2>>,
     pub scale: Component<CompItem<f64>>,
-    pub draw_icon: Component<CompItem<&'static str>>,
-    pub collider_target: Component<CompItem<Vec<EntityId>>>,
+    pub draw_param: Component<CompItem<DrawParamater>>,
+    pub collider: Component<CompItem<Vec<Collider>>>,
     pub group: Component<CompItem<usize>>,
     pub timer_time: Component<CompItem<f64>>,
     pub timer_alarm: Component<CompItem<Vec<f64>>>,
-    pub system_message: Component<CompItem<Vec<String>>>,
+
     pub parent: Component<CompItem<EntityId>>,
 }
 impl World {
@@ -328,16 +329,15 @@ impl World {
         World {
             consts: WorldConsts::new(),
             entities: EntityManager { entities: vec![] },
-            is_alive: Component::new(id_iter.next()),
             position: Component::new(id_iter.next()),
             velocity: Component::new(id_iter.next()),
             scale: Component::new(id_iter.next()),
-            draw_icon: Component::new(id_iter.next()),
-            collider_target: Component::new(id_iter.next()),
+            draw_param: Component::new(id_iter.next()),
+            collider: Component::new(id_iter.next()),
             group: Component::new(id_iter.next()),
             timer_time: Component::new(id_iter.next()),
             timer_alarm: Component::new(id_iter.next()),
-            system_message: Component::new(id_iter.next()),
+
             parent: Component::new(id_iter.next()),
         }
     }
@@ -350,16 +350,15 @@ impl World {
 
         let entity = entity.unwrap();
 
-        self.is_alive.remove(entity);
         self.position.remove(entity);
         self.velocity.remove(entity);
         self.scale.remove(entity);
-        self.draw_icon.remove(entity);
-        self.collider_target.remove(entity);
+        self.draw_param.remove(entity);
+        self.collider.remove(entity);
         self.group.remove(entity);
         self.timer_time.remove(entity);
         self.timer_alarm.remove(entity);
-        self.system_message.remove(entity);
+
         self.parent.remove(entity);
         //....
     }

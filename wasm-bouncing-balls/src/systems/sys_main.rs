@@ -4,6 +4,12 @@ use crate::{
     structs::ecs::*,
     structs::util::*,
     user_consts::{self, *},
+    utils::*,
+};
+
+use super::{
+    sys_collision::{Circle, Collider, Rect, Shape},
+    sys_draw::DrawParamater,
 };
 
 pub fn create_ball(w: &mut World) {
@@ -13,17 +19,12 @@ pub fn create_ball(w: &mut World) {
 
     //position初期化
     let mut rng = rand::thread_rng();
-    let mut rand_x = rng.gen_range(2.0..w.consts.canvas_x as f64 - 2.0);
-    let mut rand_y = rng.gen_range(2.0..w.consts.canvas_y as f64 - 2.0);
+    let mut rand_x = rng.gen_range(BALL_SIZE * 2.0..w.consts.canvas_x as f64 - BALL_SIZE * 2.0);
+    let mut rand_y = rng.gen_range(BALL_SIZE * 2.0..w.consts.canvas_y as f64 - BALL_SIZE * 2.0);
 
     let pos = Vector2 {
         x: rand_x as f64,
         y: rand_y as f64,
-    };
-
-    let pos2 = Vector2 {
-        x: coat_size::X as f64 / 2.0,
-        y: coat_size::Y as f64 / 2.0,
     };
 
     w.position.reserve(entity, pos);
@@ -38,10 +39,16 @@ pub fn create_ball(w: &mut World) {
 
     w.velocity.reserve(entity, vel * 100.0);
 
-    w.draw_icon.reserve(entity, icon::BALL);
+    let rect = Rect::new(BALL_SIZE, BALL_SIZE);
+    let collider = Collider::new(rect, group::BALL, Vector2::zero());
+    w.collider.reserve(entity, vec![collider]);
+
+    let r = Rect::new(BALL_SIZE, BALL_SIZE);
+    let draw_param = DrawParamater::new(js_color_rgba(255.0, 255.0, 255.0, 1.0), Shape::Rect(r));
+
+    w.draw_param.reserve(entity, draw_param);
     w.group.reserve(entity, group::BALL);
-    w.collider_target.reserve(entity, vec![]);
-    w.scale.reserve(entity, BALL_SIZE);
+    w.scale.reserve(entity, 1.0);
     w.timer_time.reserve_default(entity);
 }
 
@@ -80,11 +87,15 @@ pub fn ball_reflection(w: &mut World) {
         let pos = w.position.get(entity_id).unwrap();
         let mut vel = w.velocity.get(entity_id).unwrap().clone();
 
-        if pos.x <= 1.0 || pos.x >= w.consts.canvas_x as f64 - 1.0 {
+        let collider = w.collider.get_unchecked(entity_id)[0].clone();
+        let width = collider.shape.width;
+        let height = collider.shape.height;
+
+        if pos.x <= width || pos.x >= w.consts.canvas_x as f64 - width {
             vel.x = -vel.x;
         }
 
-        if pos.y <= 1.0 || pos.y >= w.consts.canvas_y as f64 - 1.0 {
+        if pos.y <= height || pos.y >= w.consts.canvas_y as f64 - height {
             vel.y = -vel.y;
         }
         w.velocity.set(entity_id, vel);
@@ -101,36 +112,6 @@ pub fn ball_move(w: &mut World) {
         w.velocity
             .set(entity_id, Vector2::normalize(&vel) * vel_mag);
     }
-}
-
-pub fn send_scroll_message(w: &mut World, str: &str) {
-    let entities = collect_entities_from_archetype(&w, &[w.velocity.id(), w.system_message.id()]);
-
-    for entity_id in entities.iter() {
-        let mut buffer = w.system_message.get(entity_id).unwrap().clone();
-
-        buffer.push(String::from(str));
-        if buffer.len() > MAX_SCROLL_MESSAGE {
-            buffer.remove(0);
-        }
-        w.system_message.set(entity_id, buffer);
-    }
-}
-
-pub fn create_scroll_message(w: &mut World) {
-    let id = w.entities.instantiate_entity();
-    let entity = w.entities.get_mut(&id).unwrap();
-
-    w.system_message.reserve_default(entity);
-    w.velocity.reserve_default(entity);
-}
-
-pub fn create_static_message(w: &mut World) {
-    let id = w.entities.instantiate_entity();
-    let entity = w.entities.get_mut(&id).unwrap();
-
-    w.system_message.reserve_default(entity);
-    w.position.reserve_default(entity);
 }
 
 pub fn create_ball_by_time(w: &mut World) {
@@ -169,21 +150,13 @@ pub fn ball_fire(w: &mut World) {
         }
     }
 }
-pub fn update_static_message(w: &mut World) {
-    let entities = collect_entities_from_archetype(&w, &[w.position.id(), w.system_message.id()]);
-
-    let mut strvec: Vec<String> = vec![String::from(""); MAX_STATIC_MESSAGE];
-
-    strvec[0] = format!("entities.len:{}", w.entities.len().to_string());
-    strvec[1] = format!(
-        "alive_entities:{}",
-        w.entities.alive_entities_len().to_string()
-    );
-
-    //メッセージentityは一つしか存在しないので決め打ちしてしまう
-    w.system_message.set(&entities[0], strvec);
+fn burret_draw_param() -> DrawParamater {
+    let c = Circle::new(BULLET_SIZE);
+    DrawParamater {
+        color: js_color_rgba(255.0, 255.0, 255.0, 1.0),
+        shape: Shape::Circle(c),
+    }
 }
-
 pub fn create_bullet(w: &mut World, parent_id: &EntityId) {
     let id = w.entities.instantiate_entity();
     let entity = w.entities.get_mut(&id).unwrap();
@@ -201,9 +174,9 @@ pub fn create_bullet(w: &mut World, parent_id: &EntityId) {
 
     w.velocity.reserve(entity, vel * 0.5);
 
-    w.draw_icon.reserve(entity, icon::BULLET);
+    w.draw_param.reserve(entity, burret_draw_param());
     w.group.reserve(entity, group::BULLET);
-    w.collider_target.reserve(entity, vec![]);
+    w.collider.reserve(entity, vec![]);
     w.scale.reserve(entity, BULLET_SIZE);
 }
 
@@ -222,9 +195,9 @@ pub fn create_aim_bullet(w: &mut World, parent_id: &EntityId, direction: &Vector
 
     w.position.reserve(entity, pos + vel);
 
-    w.draw_icon.reserve(entity, icon::BULLET);
+    w.draw_param.reserve(entity, burret_draw_param());
     w.group.reserve(entity, group::BULLET);
-    w.collider_target.reserve(entity, vec![]);
+    w.collider.reserve(entity, vec![]);
     w.scale.reserve(entity, BULLET_SIZE);
 }
 pub fn create_bullet_8way(w: &mut World, parent_id: &EntityId) {
@@ -247,11 +220,31 @@ pub fn create_bullet_8way(w: &mut World, parent_id: &EntityId) {
 
         w.velocity.reserve(entity, vel * 0.5);
 
-        w.draw_icon.reserve(entity, icon::BULLET);
+        w.draw_param.reserve(entity, burret_draw_param());
         w.group.reserve(entity, group::BULLET);
-        w.collider_target.reserve(entity, vec![]);
+        w.collider.reserve(entity, vec![]);
         w.scale.reserve(entity, BULLET_SIZE);
         angle += 45.0;
+    }
+}
+
+pub fn remove_out_of_bounds(w: &mut World) {
+    //暫定的にコライダー持ちをすべて処理(将来的にコライダーを持ったフィールド外のオブジェクトが欲しくなるかも)
+    let entities = collect_entities_from_archetype(&w, &[w.collider.id()]);
+    for entity_id in entities.iter() {
+        //ボールがコートの外に出たときに消滅させる
+        let pos = w.position.get(entity_id).unwrap();
+        let aabb = w.draw_param.get(entity_id).unwrap().shape.local_aabb();
+
+        //とりあえず描画のAABBが画面外に出たら破棄する(コライダーのAABBは描画のAABBより小さいものとする)
+        if pos.x > w.consts.canvas_x as f64 + aabb.x_max
+            || pos.x < aabb.x_min
+            || pos.y > w.consts.canvas_y as f64 + aabb.y_max
+            || pos.y < aabb.y_min
+        {
+            w.remove_entity(entity_id);
+            crate::log(&format!("領域外に落ちたentity(id:{:?})を破棄", entity_id))
+        }
     }
 }
 

@@ -1,16 +1,21 @@
 use std::{
-    io::{stdin, stdout},
     sync::mpsc::{self, Receiver, Sender},
     thread::{sleep, spawn},
     time::{Duration, Instant},
 };
-//参考:https://www.youtube.com/watch?v=LW9hT0nY51Y
 
 use crate::{
     draw_old,
     draw_old::DrawMap,
+    html_cast::*,
     structs::ecs::*,
-    systems::{draw_system, *},
+    systems::{sys_draw, *},
+};
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
+use web_sys::{
+    console, CanvasRenderingContext2d, DomRect, HtmlButtonElement, HtmlCanvasElement,
+    HtmlInputElement, HtmlParagraphElement, MouseEvent, Performance,
 };
 
 fn game_loop() {
@@ -26,8 +31,6 @@ fn game_loop() {
     }
 
     sys_main::create_timer(&mut world);
-    sys_main::create_scroll_message(&mut world);
-    sys_main::create_static_message(&mut world);
 
     let mut previous_frame_time = Instant::now();
     let mut now_frame_time;
@@ -65,9 +68,19 @@ fn main() {
     game_loop();
 }
 
-pub fn tick(world: &mut World) {
+pub fn tick(w: &mut World) {
     //sys_main::create_ball_by_time(world);
 
-    sys_main::position_update(world);
-    sys_main::ball_reflection(world);
+    let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
+    let ctx = canvas
+        .get_context("2d")
+        .unwrap()
+        .unwrap()
+        .dyn_into::<CanvasRenderingContext2d>()
+        .unwrap();
+
+    sys_draw::draw(w, &ctx);
+    sys_main::position_update(w);
+    //sys_main::ball_reflection(w);
+    sys_main::remove_out_of_bounds(w);
 }
