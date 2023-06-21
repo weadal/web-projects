@@ -310,10 +310,10 @@ impl<T> Component<CompItem<T>> {
 
 pub struct World {
     pub consts: WorldConsts,
+    pub vars: WorldVariables,
     pub entities: EntityManager,
-    pub position: Component<CompItem<Vector2>>,
-    pub velocity: Component<CompItem<Vector2>>,
-    pub scale: Component<CompItem<f64>>,
+    pub transform: Component<CompItem<Transform>>,
+    pub destination: Component<CompItem<Vec<Option<Vector2>>>>,
     pub draw_param: Component<CompItem<DrawParamater>>,
     pub collider: Component<CompItem<Vec<Collider>>>,
     pub group: Component<CompItem<usize>>,
@@ -328,16 +328,15 @@ impl World {
 
         World {
             consts: WorldConsts::new(),
+            vars: WorldVariables::new(),
             entities: EntityManager { entities: vec![] },
-            position: Component::new(id_iter.next()),
-            velocity: Component::new(id_iter.next()),
-            scale: Component::new(id_iter.next()),
+            transform: Component::new(id_iter.next()),
             draw_param: Component::new(id_iter.next()),
             collider: Component::new(id_iter.next()),
             group: Component::new(id_iter.next()),
             timer_time: Component::new(id_iter.next()),
             timer_alarm: Component::new(id_iter.next()),
-
+            destination: Component::new(id_iter.next()),
             parent: Component::new(id_iter.next()),
         }
     }
@@ -350,15 +349,14 @@ impl World {
 
         let entity = entity.unwrap();
 
-        self.position.remove(entity);
-        self.velocity.remove(entity);
-        self.scale.remove(entity);
+        self.transform.remove(entity);
+
         self.draw_param.remove(entity);
         self.collider.remove(entity);
         self.group.remove(entity);
         self.timer_time.remove(entity);
         self.timer_alarm.remove(entity);
-
+        self.destination.remove(entity);
         self.parent.remove(entity);
         //....
     }
@@ -379,6 +377,19 @@ impl WorldConsts {
             canvas_x: 0,
             canvas_y: 0,
             delta_time: 0.0,
+        }
+    }
+}
+pub struct WorldVariables {
+    pub is_playing: bool,
+    pub state: GameState,
+}
+
+impl WorldVariables {
+    fn new() -> Self {
+        WorldVariables {
+            is_playing: false,
+            state: GameState::Title,
         }
     }
 }

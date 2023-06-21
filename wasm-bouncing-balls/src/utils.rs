@@ -39,6 +39,11 @@ impl Input {
             self.is_playing = true;
         }
     }
+
+    pub fn clear(&mut self) {
+        self.click_x = None;
+        self.click_y = None;
+    }
 }
 
 pub fn request_animation_frame(closure_rc: &Rc<RefCell<Option<Closure<dyn FnMut()>>>>) -> i32 {

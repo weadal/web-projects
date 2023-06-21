@@ -5,8 +5,6 @@ use std::{
 };
 
 use crate::{
-    draw_old,
-    draw_old::DrawMap,
     html_cast::*,
     structs::ecs::*,
     systems::{sys_draw, *},
@@ -20,9 +18,6 @@ use web_sys::{
 
 fn game_loop() {
     let mut frame_time = Instant::now();
-
-    let (mut tx_draw, rx_draw) = mpsc::channel::<DrawMap>();
-    spawn(move || draw_old::draw_loop(rx_draw));
 
     let mut world = World::new();
 
@@ -83,4 +78,5 @@ pub fn tick(w: &mut World) {
     sys_main::position_update(w);
     //sys_main::ball_reflection(w);
     sys_main::remove_out_of_bounds(w);
+    sys_main::check_gameover(w);
 }

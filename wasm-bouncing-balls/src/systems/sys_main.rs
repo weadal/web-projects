@@ -27,8 +27,6 @@ pub fn create_ball(w: &mut World) {
         y: rand_y as f64,
     };
 
-    w.position.reserve(entity, pos);
-
     //velocity初期化
     rand_x = rng.gen_range(-1.0..1.0);
     rand_y = rng.gen_range(-1.0..1.0);
@@ -37,7 +35,13 @@ pub fn create_ball(w: &mut World) {
         y: rand_y,
     });
 
-    w.velocity.reserve(entity, vel * 100.0);
+    let transform = Transform {
+        position: pos,
+        scale: 1.0,
+        velocity: vel * 100.0,
+    };
+
+    w.transform.reserve(entity, transform);
 
     let rect = Rect::new(BALL_SIZE, BALL_SIZE);
     let collider = Collider::new(rect, group::BALL, Vector2::zero());
@@ -48,7 +52,6 @@ pub fn create_ball(w: &mut World) {
 
     w.draw_param.reserve(entity, draw_param);
     w.group.reserve(entity, group::BALL);
-    w.scale.reserve(entity, 1.0);
     w.timer_time.reserve_default(entity);
 }
 
@@ -69,48 +72,50 @@ pub fn update_timer(w: &mut World, delta_time: &f64) {
 }
 
 pub fn position_update(w: &mut World) {
-    let entities = collect_entities_from_archetype(&w, &[w.position.id(), w.velocity.id()]);
+    let entities = collect_entities_from_archetype(&w, &[w.transform.id()]);
 
     for entity_id in entities.iter() {
-        let mut pos = w.position.get(entity_id).unwrap().clone();
-        let vel = w.velocity.get(entity_id).unwrap();
+        let mut transform = w.transform.get(entity_id).unwrap().clone();
+        let vel = transform.velocity;
 
-        pos.x += vel.x * w.consts.delta_time / 1000.0;
-        pos.y += vel.y * w.consts.delta_time / 1000.0;
-        w.position.set(entity_id, pos);
+        transform.position.x += vel.x * w.consts.delta_time / 1000.0;
+        transform.position.y += vel.y * w.consts.delta_time / 1000.0;
+        w.transform.set(entity_id, transform);
     }
 }
 
 pub fn ball_reflection(w: &mut World) {
     let entities = collect_entities_from_group(w, &group::BALL);
     for entity_id in entities.iter() {
-        let pos = w.position.get(entity_id).unwrap();
-        let mut vel = w.velocity.get(entity_id).unwrap().clone();
+        let mut transform = w.transform.get(entity_id).unwrap().clone();
 
         let collider = w.collider.get_unchecked(entity_id)[0].clone();
         let width = collider.shape.width;
         let height = collider.shape.height;
 
-        if pos.x <= width || pos.x >= w.consts.canvas_x as f64 - width {
-            vel.x = -vel.x;
+        if transform.position.x <= width || transform.position.x >= w.consts.canvas_x as f64 - width
+        {
+            transform.velocity.x = -transform.velocity.x;
         }
 
-        if pos.y <= height || pos.y >= w.consts.canvas_y as f64 - height {
-            vel.y = -vel.y;
+        if transform.position.y <= height
+            || transform.position.y >= w.consts.canvas_y as f64 - height
+        {
+            transform.velocity.y = -transform.velocity.y;
         }
-        w.velocity.set(entity_id, vel);
+        w.transform.set(entity_id, transform);
     }
 }
 
 pub fn ball_move(w: &mut World) {
     let entities = collect_entities_from_group(w, &group::BALL);
     for entity_id in entities.iter() {
-        let mut vel = w.velocity.get(entity_id).unwrap().clone();
-        let vel_mag = vel.magnitude();
-        let right = vel.right() * 0.02;
-        vel = vel + right;
-        w.velocity
-            .set(entity_id, Vector2::normalize(&vel) * vel_mag);
+        let mut transform = w.transform.get(entity_id).unwrap().clone();
+        let vel_mag = transform.velocity.magnitude();
+        let right = transform.velocity.right() * 0.02;
+        transform.velocity = transform.velocity + right;
+        transform.velocity = Vector2::normalize(&transform.velocity) * vel_mag;
+        w.transform.set(entity_id, transform);
     }
 }
 
@@ -143,7 +148,7 @@ pub fn ball_fire(w: &mut World) {
 
         let target = nearest_target(w, entity_id, &group::BALL);
         if let Some(value) = target {
-            let direction = value.1 - w.position.get(entity_id).unwrap().clone();
+            let direction = value.1 - w.transform.get(entity_id).unwrap().clone().position;
 
             create_aim_bullet(w, entity_id, &direction);
             w.timer_time.set(entity_id, timer - BULLET_FIRE_SPAN);
@@ -163,21 +168,21 @@ pub fn create_bullet(w: &mut World, parent_id: &EntityId) {
 
     w.parent.reserve(entity, parent_id.clone());
 
-    let pos = w.position.get(parent_id).unwrap().clone();
-
-    w.position.reserve(entity, pos);
+    let mut transform = w.transform.get(parent_id).unwrap().clone();
 
     //velocity初期化
 
     let mut vel = Vector2::normalize(&Vector2 { x: 1.0, y: 0.0 });
     vel = vel.rotate(90.0);
 
-    w.velocity.reserve(entity, vel * 0.5);
+    transform.velocity = vel;
+    transform.scale = BULLET_SIZE;
+
+    w.transform.reserve(entity, transform);
 
     w.draw_param.reserve(entity, burret_draw_param());
     w.group.reserve(entity, group::BULLET);
     w.collider.reserve(entity, vec![]);
-    w.scale.reserve(entity, BULLET_SIZE);
 }
 
 pub fn create_aim_bullet(w: &mut World, parent_id: &EntityId, direction: &Vector2) {
@@ -189,43 +194,17 @@ pub fn create_aim_bullet(w: &mut World, parent_id: &EntityId, direction: &Vector
     //velocity初期化
     let vel = Vector2::normalize(direction);
 
-    w.velocity.reserve(entity, vel * 0.5);
+    let mut transform = w.transform.get_unchecked(parent_id).clone();
 
-    let pos = w.position.get_unchecked(parent_id).clone();
+    transform.position = transform.position + vel;
+    transform.velocity = vel * 0.5;
+    transform.scale = BULLET_SIZE;
 
-    w.position.reserve(entity, pos + vel);
+    w.transform.reserve(entity, transform);
 
     w.draw_param.reserve(entity, burret_draw_param());
     w.group.reserve(entity, group::BULLET);
     w.collider.reserve(entity, vec![]);
-    w.scale.reserve(entity, BULLET_SIZE);
-}
-pub fn create_bullet_8way(w: &mut World, parent_id: &EntityId) {
-    let mut angle = 0.0;
-
-    for _ in 0..8 {
-        let id = w.entities.instantiate_entity();
-        let entity = w.entities.get_mut(&id).unwrap();
-
-        w.parent.reserve(entity, parent_id.clone());
-
-        let pos = w.position.get(parent_id).unwrap().clone();
-
-        w.position.reserve(entity, pos);
-
-        //velocity初期化
-
-        let mut vel = Vector2::normalize(&Vector2 { x: 1.0, y: 0.0 });
-        vel = vel.rotate(angle);
-
-        w.velocity.reserve(entity, vel * 0.5);
-
-        w.draw_param.reserve(entity, burret_draw_param());
-        w.group.reserve(entity, group::BULLET);
-        w.collider.reserve(entity, vec![]);
-        w.scale.reserve(entity, BULLET_SIZE);
-        angle += 45.0;
-    }
 }
 
 pub fn remove_out_of_bounds(w: &mut World) {
@@ -233,7 +212,7 @@ pub fn remove_out_of_bounds(w: &mut World) {
     let entities = collect_entities_from_archetype(&w, &[w.collider.id()]);
     for entity_id in entities.iter() {
         //ボールがコートの外に出たときに消滅させる
-        let pos = w.position.get(entity_id).unwrap();
+        let pos = w.transform.get(entity_id).unwrap().position;
         let aabb = w.draw_param.get(entity_id).unwrap().shape.local_aabb();
 
         //とりあえず描画のAABBが画面外に出たら破棄する(コライダーのAABBは描画のAABBより小さいものとする)
@@ -249,11 +228,11 @@ pub fn remove_out_of_bounds(w: &mut World) {
 }
 
 pub fn nearest_target(w: &World, self_id: &EntityId, group: &usize) -> Option<(EntityId, Vector2)> {
-    let position = w.position.get(self_id).unwrap().clone();
+    let position = w.transform.get(self_id).unwrap().clone().position;
     let mut nearest_distance = std::f64::MAX;
     let mut nearest_target_tupple: Option<(EntityId, Vector2)> = None;
 
-    for value in w.position.items.iter() {
+    for value in w.transform.items.iter() {
         if value.id == *self_id {
             continue;
         }
@@ -267,15 +246,23 @@ pub fn nearest_target(w: &World, self_id: &EntityId, group: &usize) -> Option<(E
             }
         }
 
-        let ref_distance = (value.item.clone() - position).sqr_magnitude();
+        let ref_distance = (value.item.position - position).sqr_magnitude();
 
         if nearest_distance > ref_distance {
             nearest_distance = ref_distance;
-            nearest_target_tupple = Some((value.id, value.item.clone()));
+            nearest_target_tupple = Some((value.id, value.item.position));
         }
     }
 
     nearest_target_tupple
+}
+
+pub fn check_gameover(w: &mut World) {
+    //暫定的に全エンティティがいなくなったらゲームオーバー
+    let alive_entities = w.entities.get_alive_entities();
+    if let None = alive_entities {
+        w.vars.state = GameState::GameOver;
+    }
 }
 
 pub fn collect_entities_from_archetype(w: &World, values: &[ComponentId]) -> Vec<EntityId> {

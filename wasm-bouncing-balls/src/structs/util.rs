@@ -110,3 +110,15 @@ impl Add for Vector2 {
         }
     }
 }
+#[derive(Copy, Clone, Debug, PartialEq, Default)]
+pub struct Transform {
+    pub position: Vector2,
+    pub scale: f64,
+    pub velocity: Vector2,
+}
+
+pub enum GameState {
+    Title,
+    Main,
+    GameOver,
+}

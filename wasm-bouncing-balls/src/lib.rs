@@ -1,4 +1,3 @@
-pub mod draw_old;
 pub mod game_loop;
 pub mod structs;
 pub mod systems;
@@ -14,7 +13,7 @@ use std::{
 
 use html_cast::*;
 use js_sys::Math;
-use structs::ecs::World;
+use structs::{ecs::World, util::GameState};
 use systems::*;
 use utils::*;
 use wasm_bindgen::prelude::*;
@@ -140,6 +139,8 @@ pub fn start() -> Result<(), JsValue> {
         closure.forget();
     }
 
+    input.borrow_mut().is_playing = true;
+
     main_loop(balls_rc.clone(), input.clone());
 
     Ok(())
@@ -151,24 +152,11 @@ fn main_loop(balls_rc: Rc<RefCell<Vec<Ball>>>, input: Rc<RefCell<Input>>) {
 
     let mut fps = Fps::new();
 
-    input.borrow_mut().is_playing = true;
-
     let mut world = World::new();
-
-    let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
-    world.consts.canvas_x = canvas.width();
-    world.consts.canvas_y = canvas.height();
-
-    for _ in 0..25 {
-        sys_main::create_ball(&mut world);
-    }
 
     let input_rc_clone = input.clone();
     *closure_clone.borrow_mut() = Some(Closure::new(move || {
-        if input_rc_clone.borrow().is_playing {
-            update(&mut balls_rc.borrow_mut(), &mut world);
-            game_loop::tick(&mut world);
-        }
+        update(&mut balls_rc.borrow_mut(), &mut world, &input_rc_clone);
         fps.render();
         world.consts.delta_time = fps.delta_time;
         request_animation_frame(&closure);
@@ -177,7 +165,64 @@ fn main_loop(balls_rc: Rc<RefCell<Vec<Ball>>>, input: Rc<RefCell<Input>>) {
     request_animation_frame(&closure_clone);
 }
 
-fn update(balls: &mut RefMut<Vec<Ball>>, world: &mut World) {
+fn update(balls: &mut RefMut<Vec<Ball>>, world: &mut World, input: &Rc<RefCell<Input>>) {
+    if input.borrow().is_playing {
+        match world.vars.state {
+            GameState::Title => update_title(world, input),
+            GameState::Main => {
+                update_main(balls, world);
+                game_loop::tick(world);
+            }
+            GameState::GameOver => update_gameover(world, input),
+            _ => (),
+        }
+    }
+    input.borrow_mut().clear();
+}
+
+fn update_title(world: &mut World, input: &Rc<RefCell<Input>>) {
+    let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
+    let ctx = canvas
+        .get_context("2d")
+        .unwrap()
+        .unwrap()
+        .dyn_into::<CanvasRenderingContext2d>()
+        .unwrap();
+
+    ctx.set_fill_style(&js_color_rgba(0.0, 0.0, 0.0, 1.0));
+    ctx.fill_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
+
+    log("Title");
+
+    let mut input = input.borrow_mut();
+    if input.click_x != None || input.click_y != None {
+        input.click_x = None;
+        input.click_y = None;
+
+        world.consts.canvas_x = canvas.width();
+        world.consts.canvas_y = canvas.height();
+
+        for _ in 0..25 {
+            sys_main::create_ball(world);
+        }
+
+        log("Game Start!");
+        world.vars.state = GameState::Main;
+    }
+}
+
+fn update_gameover(world: &mut World, input: &Rc<RefCell<Input>>) {
+    let input = input.borrow_mut();
+
+    log("Game Over! Click or Tap to Title");
+
+    if input.click_x != None || input.click_y != None {
+        log("Return to Title...");
+        world.vars.state = GameState::Title;
+    }
+}
+
+fn update_main(balls: &mut RefMut<Vec<Ball>>, world: &mut World) {
     let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
     let ctx = canvas
         .get_context("2d")
@@ -198,12 +243,6 @@ fn update(balls: &mut RefMut<Vec<Ball>>, world: &mut World) {
     ctx.set_line_width(2.0);
 
     let loot_node = create_tree(ballrefs.clone(), &ctx, false);
-
-    // let balls_with_possible_contact = get_contact_with(
-    //     loot_node.left_child.as_ref().unwrap(),
-    //     loot_node.right_child.as_ref().unwrap(),
-    //     Rc::new(RefCell::new(vec![])),
-    // );
 
     let loot_node_box = Box::new(loot_node);
     let balls_with_possible_contact: Rc<RefCell<Vec<(&Ball, &Ball)>>> =

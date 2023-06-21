@@ -29,7 +29,7 @@ pub fn draw(w: &mut World, ctx: &CanvasRenderingContext2d) {
     let entities = collect_entities_from_archetype(&w, &[w.draw_param.id()]);
 
     for entity_id in entities.iter() {
-        let pos = w.position.get_unchecked(entity_id);
+        let pos = w.transform.get_unchecked(entity_id).position;
         let param = w.draw_param.get_unchecked(entity_id);
 
         match &param.shape {
