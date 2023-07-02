@@ -13,7 +13,10 @@ use std::{
 
 use html_cast::*;
 use js_sys::Math;
-use structs::{ecs::World, util::GameState};
+use structs::{
+    ecs::World,
+    util::{GameState, Vector2},
+};
 use systems::*;
 use utils::*;
 use wasm_bindgen::prelude::*;
@@ -45,8 +48,29 @@ pub fn start() -> Result<(), JsValue> {
     utils::set_panic_hook();
     let input = Rc::new(RefCell::new(Input::new()));
 
-    //canvas設定
+    canvas_setting(input.clone());
 
+    let balls: Vec<Ball> = Vec::new();
+    let balls_rc = Rc::new(RefCell::new(balls));
+
+    let balls_size = Number(
+        &query_selector_to::<HtmlInputElement>(".ball-field")
+            .unwrap()
+            .value(),
+    );
+
+    balls_init(&balls_rc, balls_size);
+
+    html_ui_setting(input.clone(), balls_rc.clone());
+
+    input.borrow_mut().is_playing = true;
+
+    main_loop(balls_rc.clone(), input.clone());
+
+    Ok(())
+}
+
+fn canvas_setting(input: Rc<RefCell<Input>>) {
     let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
 
     let width = 960;
@@ -62,37 +86,68 @@ pub fn start() -> Result<(), JsValue> {
     let scale_y = canvas.height() as f64 / bounding_rect.height();
 
     let input_clone = input.clone();
+    let bounding_rect_clone = bounding_rect.clone();
 
-    //canvas上をクリックすることでキャンバス上の座標を取得するイベントハンドラ
-    let closure = Closure::wrap(Box::new(move |e: MouseEvent| {
-        //クリックされた絶対位置から矩形領域の位置を引いてローカル座標を取得する また、相対スケールも掛けておく
-        let local_x = (e.client_x() as f64 - bounding_rect.left()) * scale_x;
-        let local_y = (e.client_y() as f64 - bounding_rect.top()) * scale_y;
+    let mouse_down_closure = Closure::wrap(Box::new(move |e: MouseEvent| {
+        let mut local_coordinate = Vector2::zero();
+        local_coordinate.x = (e.client_x() as f64 - bounding_rect_clone.left()) * scale_x;
+        local_coordinate.y = (e.client_y() as f64 - bounding_rect_clone.top()) * scale_y;
 
-        input_clone.borrow_mut().click_x = Some(local_x);
-        input_clone.borrow_mut().click_y = Some(local_y);
+        input_clone.borrow_mut().mouse_down_point = Some(local_coordinate);
 
-        log(&format!("click! local_x:{},local_y:{}", local_x, local_y));
+        input_clone.borrow_mut().is_mouse_down = true;
+        log(&format!(
+            "mouse_down start x:{},y:{}",
+            local_coordinate.x, local_coordinate.y
+        ));
     }) as Box<dyn FnMut(_)>);
 
     canvas
-        .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
+        .add_event_listener_with_callback("mousedown", mouse_down_closure.as_ref().unchecked_ref())
         .unwrap();
-    closure.forget();
+    mouse_down_closure.forget();
+
+    let input_clone = input.clone();
+
+    //canvas上をクリックすることでキャンバス上の座標を取得するイベントハンドラ
+    let mouse_up_closure = Closure::wrap(Box::new(move |e: MouseEvent| {
+        //クリックされた絶対位置から矩形領域の位置を引いてローカル座標を取得する また、相対スケールも掛けておく
+        let mut local_coordinate = Vector2::zero();
+        local_coordinate.x = (e.client_x() as f64 - bounding_rect.left()) * scale_x;
+        local_coordinate.y = (e.client_y() as f64 - bounding_rect.top()) * scale_y;
+
+        input_clone.borrow_mut().click_point = Some(local_coordinate);
+
+        let mouse_delta = input_clone.borrow().mouse_down_point.unwrap() - local_coordinate;
+
+        let mouse_delta_normalize = mouse_delta.normalize();
+        log(&format!(
+            "click! local_x:{},local_y:{}",
+            local_coordinate.x, local_coordinate.y
+        ));
+        log(&format!(
+            "mouse_delta x:{},y:{}",
+            mouse_delta_normalize.x, mouse_delta_normalize.y
+        ));
+        log(&format!(
+            "mousedown time :{}",
+            input_clone.borrow().mouse_down_time
+        ));
+
+        input_clone.borrow_mut().is_mouse_down = false;
+        input_clone.borrow_mut().mouse_down_time = 0.0;
+
+        input_clone.borrow_mut().mouse_down_point = None;
+    }) as Box<dyn FnMut(_)>);
+
+    canvas
+        .add_event_listener_with_callback("mouseup", mouse_up_closure.as_ref().unchecked_ref())
+        .unwrap();
+    mouse_up_closure.forget();
 
     //canvas設定ここまで
-
-    let balls: Vec<Ball> = Vec::new();
-    let balls_rc = Rc::new(RefCell::new(balls));
-
-    let balls_size = Number(
-        &query_selector_to::<HtmlInputElement>(".ball-field")
-            .unwrap()
-            .value(),
-    );
-
-    balls_init(&balls_rc, balls_size);
-
+}
+fn html_ui_setting(input: Rc<RefCell<Input>>, balls_rc: Rc<RefCell<Vec<Ball>>>) {
     let input_clone = input.clone();
     //一時停止ボタン
     {
@@ -138,12 +193,6 @@ pub fn start() -> Result<(), JsValue> {
             .unwrap();
         closure.forget();
     }
-
-    input.borrow_mut().is_playing = true;
-
-    main_loop(balls_rc.clone(), input.clone());
-
-    Ok(())
 }
 
 fn main_loop(balls_rc: Rc<RefCell<Vec<Ball>>>, input: Rc<RefCell<Input>>) {
@@ -158,7 +207,13 @@ fn main_loop(balls_rc: Rc<RefCell<Vec<Ball>>>, input: Rc<RefCell<Input>>) {
     *closure_clone.borrow_mut() = Some(Closure::new(move || {
         update(&mut balls_rc.borrow_mut(), &mut world, &input_rc_clone);
         fps.render();
+
         world.consts.delta_time = fps.delta_time;
+
+        if input_rc_clone.borrow().is_mouse_down {
+            input_rc_clone.borrow_mut().mouse_down_time += fps.delta_time;
+        }
+
         request_animation_frame(&closure);
     }));
 
@@ -172,12 +227,14 @@ fn update(balls: &mut RefMut<Vec<Ball>>, world: &mut World, input: &Rc<RefCell<I
             GameState::Main => {
                 update_main(balls, world);
                 game_loop::tick(world);
+                world.vars.last_click_point = input.borrow().click_point;
+                input.borrow_mut().clear_click_point();
             }
             GameState::GameOver => update_gameover(world, input),
             _ => (),
         }
     }
-    input.borrow_mut().clear();
+    input.borrow_mut().clear_click_point();
 }
 
 fn update_title(world: &mut World, input: &Rc<RefCell<Input>>) {
@@ -195,9 +252,8 @@ fn update_title(world: &mut World, input: &Rc<RefCell<Input>>) {
     log("Title");
 
     let mut input = input.borrow_mut();
-    if input.click_x != None || input.click_y != None {
-        input.click_x = None;
-        input.click_y = None;
+    if input.click_point != None {
+        input.clear_click_point();
 
         world.consts.canvas_x = canvas.width();
         world.consts.canvas_y = canvas.height();
@@ -206,18 +262,21 @@ fn update_title(world: &mut World, input: &Rc<RefCell<Input>>) {
             sys_main::create_ball(world);
         }
 
+        sys_main::create_player(world);
+
         log("Game Start!");
         world.vars.state = GameState::Main;
     }
 }
 
 fn update_gameover(world: &mut World, input: &Rc<RefCell<Input>>) {
-    let input = input.borrow_mut();
+    let mut input = input.borrow_mut();
 
     log("Game Over! Click or Tap to Title");
 
-    if input.click_x != None || input.click_y != None {
+    if input.click_point != None {
         log("Return to Title...");
+        input.clear_click_point();
         world.vars.state = GameState::Title;
     }
 }

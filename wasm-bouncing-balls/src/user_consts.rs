@@ -19,8 +19,9 @@ pub mod icon {
 
 pub mod group {
     pub const SYSTEM: usize = 0;
-    pub const BALL: usize = 1;
-    pub const BULLET: usize = 2;
+    pub const PLAYER: usize = 1;
+    pub const BALL: usize = 2;
+    pub const BULLET: usize = 3;
 }
 pub const MAX_COMPONENTS: usize = 100;
 pub const MAX_SCROLL_MESSAGE: usize = 20;

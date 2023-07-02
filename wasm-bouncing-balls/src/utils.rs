@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::html_cast::*;
+use crate::{html_cast::*, structs::util::Vector2};
 use js_sys::Math;
 
 use crate::*;
@@ -19,16 +19,20 @@ pub fn set_panic_hook() {
 }
 
 pub struct Input {
-    pub click_x: Option<f64>,
-    pub click_y: Option<f64>,
+    pub click_point: Option<Vector2>,
     pub is_playing: bool,
+    pub is_mouse_down: bool,
+    pub mouse_down_time: f64,
+    pub mouse_down_point: Option<Vector2>,
 }
 impl Input {
     pub fn new() -> Self {
         Input {
-            click_x: None,
-            click_y: None,
+            click_point: None,
             is_playing: false,
+            is_mouse_down: false,
+            mouse_down_time: 0.0,
+            mouse_down_point: None,
         }
     }
 
@@ -40,9 +44,8 @@ impl Input {
         }
     }
 
-    pub fn clear(&mut self) {
-        self.click_x = None;
-        self.click_y = None;
+    pub fn clear_click_point(&mut self) {
+        self.click_point = None;
     }
 }
 

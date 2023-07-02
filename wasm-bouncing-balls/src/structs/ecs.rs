@@ -248,7 +248,7 @@ impl<T> Component<CompItem<T>> {
 
         self.items.len() - 1
     }
-    pub fn reserve_default(&mut self, entity: &mut Entity)
+    pub fn register_default(&mut self, entity: &mut Entity)
     where
         T: Default,
     {
@@ -264,7 +264,7 @@ impl<T> Component<CompItem<T>> {
         //渡されたentityのアーキタイプに自身のidを追加する
         entity.archetype.components.push(self.id);
     }
-    pub fn reserve(&mut self, entity: &mut Entity, item: T) {
+    pub fn register(&mut self, entity: &mut Entity, item: T) {
         //渡されたentityがすでにmapに存在しているかを確認する
         if let Some(_) = self.id_index_map.get(&entity.id) {
             panic!("渡されたentityに紐づいたitemがすでに存在します 二重に確保することはできません")
@@ -382,6 +382,7 @@ impl WorldConsts {
 }
 pub struct WorldVariables {
     pub is_playing: bool,
+    pub last_click_point: Option<Vector2>,
     pub state: GameState,
 }
 
@@ -389,6 +390,7 @@ impl WorldVariables {
     fn new() -> Self {
         WorldVariables {
             is_playing: false,
+            last_click_point: None,
             state: GameState::Title,
         }
     }

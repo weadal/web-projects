@@ -32,8 +32,8 @@ impl Vector2 {
         a.magnitude()
     }
 
-    pub fn normalize(vec2: &Vector2) -> Vector2 {
-        let length = f64::sqrt(vec2.sqr_magnitude());
+    pub fn normalize(&self) -> Vector2 {
+        let length = f64::sqrt(self.sqr_magnitude());
 
         //ゼロ除算回避
         if length <= 0.0 {
@@ -41,8 +41,8 @@ impl Vector2 {
         }
 
         Vector2 {
-            x: vec2.x / length,
-            y: vec2.y / length,
+            x: self.x / length,
+            y: self.y / length,
         }
     }
 
