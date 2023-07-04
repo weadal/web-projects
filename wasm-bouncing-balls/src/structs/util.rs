@@ -117,6 +117,34 @@ pub struct Transform {
     pub velocity: Vector2,
 }
 
+pub struct Clock {
+    pub time: Vec<Option<f64>>,
+    pub alarm: Vec<Option<f64>>,
+}
+impl Clock {
+    pub fn new() -> Self {
+        Clock {
+            time: vec![Some(0.0)],
+            alarm: vec![None],
+        }
+    }
+    pub fn time_reset(&mut self, index: usize) {
+        if index >= self.time.len() {
+            panic!("index out of range");
+        }
+        if let Some(_) = self.time[index] {
+            self.time[index] = Some(0.0);
+        }
+    }
+    pub fn time_set(&mut self, time: f64, index: usize) {
+        if index >= self.time.len() {
+            panic!("index out of range");
+        }
+
+        self.time[index] = Some(time);
+    }
+}
+
 pub enum GameState {
     Title,
     Main,

@@ -317,9 +317,7 @@ pub struct World {
     pub draw_param: Component<CompItem<DrawParamater>>,
     pub collider: Component<CompItem<Vec<Collider>>>,
     pub group: Component<CompItem<usize>>,
-    pub timer_time: Component<CompItem<f64>>,
-    pub timer_alarm: Component<CompItem<Vec<f64>>>,
-
+    pub clock: Component<CompItem<Clock>>,
     pub parent: Component<CompItem<EntityId>>,
 }
 impl World {
@@ -334,8 +332,7 @@ impl World {
             draw_param: Component::new(id_iter.next()),
             collider: Component::new(id_iter.next()),
             group: Component::new(id_iter.next()),
-            timer_time: Component::new(id_iter.next()),
-            timer_alarm: Component::new(id_iter.next()),
+            clock: Component::new(id_iter.next()),
             destination: Component::new(id_iter.next()),
             parent: Component::new(id_iter.next()),
         }
@@ -354,8 +351,7 @@ impl World {
         self.draw_param.remove(entity);
         self.collider.remove(entity);
         self.group.remove(entity);
-        self.timer_time.remove(entity);
-        self.timer_alarm.remove(entity);
+        self.clock.remove(entity);
         self.destination.remove(entity);
         self.parent.remove(entity);
         //....

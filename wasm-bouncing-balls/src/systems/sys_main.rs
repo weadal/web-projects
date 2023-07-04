@@ -40,6 +40,7 @@ pub fn create_player(w: &mut World) {
 
     w.draw_param.register(entity, draw_param);
     w.destination.register(entity, vec![None]);
+    w.clock.register(entity, Clock::new());
 }
 
 pub fn player_move(w: &mut World) {
@@ -72,6 +73,18 @@ pub fn player_move(w: &mut World) {
                 transform.velocity = direction * 100.0;
                 w.transform.set(entity_id, transform);
             }
+        }
+    }
+}
+
+pub fn player_attack(w: &mut World) {
+    let entities = collect_entities_from_group(w, &group::PLAYER);
+    for entity_id in entities.iter() {
+        let time = w.clock.get_unchecked(entity_id).time[0].unwrap();
+
+        if time > 1000.0 {
+            create_bullet(w, entity_id);
+            w.clock.get_unchecked_mut(entity_id).time_reset(0);
         }
     }
 }
@@ -116,22 +129,19 @@ pub fn create_ball(w: &mut World) {
 
     w.draw_param.register(entity, draw_param);
     w.group.register(entity, group::BALL);
-    w.timer_time.register_default(entity);
+    w.clock.register(entity, Clock::new());
 }
 
-pub fn create_timer(w: &mut World) {
-    let id = w.entities.instantiate_entity();
-
-    w.timer_time.register(w.entities.get_mut(&id).unwrap(), 0.0);
-    w.timer_alarm
-        .register(w.entities.get_mut(&id).unwrap(), vec![0.0]);
-}
-pub fn update_timer(w: &mut World, delta_time: &f64) {
-    let entities = collect_entities_from_archetype(&w, &[w.timer_time.id()]);
+pub fn update_timer(w: &mut World) {
+    let entities = collect_entities_from_archetype(&w, &[w.clock.id()]);
 
     for entity_id in entities.iter() {
-        let now = w.timer_time.get(entity_id).unwrap().clone();
-        w.timer_time.set(&entity_id, now + delta_time);
+        let clock = w.clock.get(entity_id).unwrap().time.clone();
+        for (index, time) in clock.iter().enumerate() {
+            if let Some(t) = time {
+                w.clock.get_unchecked_mut(entity_id).time[index] = Some(t + w.consts.delta_time);
+            }
+        }
     }
 }
 
@@ -183,42 +193,43 @@ pub fn ball_move(w: &mut World) {
     }
 }
 
-pub fn create_ball_by_time(w: &mut World) {
-    let entities = collect_entities_from_archetype(&w, &[w.timer_time.id(), w.timer_alarm.id()]);
-    let timer_id = &entities[0];
+// pub fn create_ball_by_time(w: &mut World) {
+//     let entities = collect_entities_from_archetype(&w, &[w.clock.id(), w.timer_alarm.id()]);
+//     let timer_id = &entities[0];
 
-    let timer = w.timer_time.get_mut(timer_id).unwrap().clone();
+//     let timer = w.clock.get_mut(timer_id).unwrap().clone();
 
-    if timer > w.timer_alarm.get(timer_id).unwrap()[0] {
-        for _ in 0..BALL_SPAWN_MULTIPRIER {
-            create_ball(w);
-        }
+//     if timer > w.timer_alarm.get(timer_id).unwrap()[0] {
+//         for _ in 0..BALL_SPAWN_MULTIPRIER {
+//             create_ball(w);
+//         }
 
-        let mut buffer = w.timer_alarm.get(timer_id).unwrap().clone();
-        buffer[0] = timer + BALL_SPAWN_SPAN;
+//         let mut buffer = w.timer_alarm.get(timer_id).unwrap().clone();
+//         buffer[0] = timer + BALL_SPAWN_SPAN;
 
-        w.timer_alarm.set(timer_id, buffer);
-    }
-}
+//         w.timer_alarm.set(timer_id, buffer);
+//     }
+// }
 
-pub fn ball_fire(w: &mut World) {
-    let entities = collect_entities_from_group(w, &group::BALL);
+// pub fn ball_fire(w: &mut World) {
+//     let entities = collect_entities_from_group(w, &group::BALL);
 
-    for entity_id in entities.iter() {
-        let timer = w.timer_time.get(entity_id).unwrap().clone();
-        if timer < BULLET_FIRE_SPAN {
-            continue;
-        }
+//     for entity_id in entities.iter() {
+//         let timer = w.clock.get(entity_id).unwrap().clone();
+//         if timer < BULLET_FIRE_SPAN {
+//             continue;
+//         }
 
-        let target = nearest_target(w, entity_id, &group::BALL);
-        if let Some(value) = target {
-            let direction = value.1 - w.transform.get(entity_id).unwrap().clone().position;
+//         let target = nearest_target(w, entity_id, &group::BALL);
+//         if let Some(value) = target {
+//             let direction = value.1 - w.transform.get(entity_id).unwrap().clone().position;
 
-            create_aim_bullet(w, entity_id, &direction);
-            w.timer_time.set(entity_id, timer - BULLET_FIRE_SPAN);
-        }
-    }
-}
+//             create_aim_bullet(w, entity_id, &direction);
+//             w.clock.set(entity_id, timer - BULLET_FIRE_SPAN);
+//         }
+//     }
+// }
+
 fn burret_draw_param() -> DrawParamater {
     let c = Circle::new(BULLET_SIZE);
     DrawParamater {

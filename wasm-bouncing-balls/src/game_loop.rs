@@ -25,8 +25,6 @@ fn game_loop() {
         sys_main::create_ball(&mut world);
     }
 
-    sys_main::create_timer(&mut world);
-
     let mut previous_frame_time = Instant::now();
     let mut now_frame_time;
 
@@ -53,7 +51,7 @@ fn game_loop() {
             .duration_since(previous_frame_time)
             .as_secs_f64();
 
-        sys_main::update_timer(&mut world, &delta_time);
+        sys_main::update_timer(&mut world);
 
         previous_frame_time = Instant::now();
     }
@@ -77,7 +75,9 @@ pub fn tick(w: &mut World) {
     sys_draw::draw(w, &ctx);
     sys_main::position_update(w);
     sys_main::player_move(w);
+    sys_main::player_attack(w);
     sys_main::ball_reflection(w);
     sys_main::remove_out_of_bounds(w);
     sys_main::check_gameover(w);
+    sys_main::update_timer(w);
 }
