@@ -4,7 +4,7 @@ use rand::Rng;
 
 use crate::{
     structs::ecs::*,
-    structs::util::*,
+    structs::structs_util::*,
     systems::sys_main::*,
     user_consts::{self, *},
     utils::*,
@@ -13,13 +13,13 @@ use crate::{
 #[derive(Clone)]
 pub struct Collider {
     pub shape: Rect,
-    pub group: usize,
+    pub group: Group,
     pub offset: Vector2,
     pub targets: Option<Vec<EntityId>>,
 }
 
 impl Collider {
-    pub fn new(shape: Rect, group: usize, offset: Vector2) -> Collider {
+    pub fn new(shape: Rect, group: Group, offset: Vector2) -> Collider {
         Collider {
             shape,
             group,

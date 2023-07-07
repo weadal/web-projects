@@ -1,2 +1,2 @@
 pub mod ecs;
-pub mod util;
+pub mod structs_util;

@@ -1,4 +1,4 @@
-use crate::structs::util::*;
+use crate::structs::structs_util::*;
 use crate::systems::sys_collision::Collider;
 use crate::systems::sys_draw::DrawParamater;
 use crate::user_consts::MAX_COMPONENTS;
@@ -316,9 +316,9 @@ pub struct World {
     pub destination: Component<CompItem<Vec<Option<Vector2>>>>,
     pub draw_param: Component<CompItem<DrawParamater>>,
     pub collider: Component<CompItem<Vec<Collider>>>,
-    pub group: Component<CompItem<usize>>,
+    pub group: Component<CompItem<Group>>,
     pub clock: Component<CompItem<Clock>>,
-    pub parent: Component<CompItem<EntityId>>,
+    pub target: Component<CompItem<Vec<Option<EntityId>>>>,
 }
 impl World {
     pub fn new() -> Self {
@@ -334,7 +334,7 @@ impl World {
             group: Component::new(id_iter.next()),
             clock: Component::new(id_iter.next()),
             destination: Component::new(id_iter.next()),
-            parent: Component::new(id_iter.next()),
+            target: Component::new(id_iter.next()),
         }
     }
 
@@ -353,7 +353,7 @@ impl World {
         self.group.remove(entity);
         self.clock.remove(entity);
         self.destination.remove(entity);
-        self.parent.remove(entity);
+        self.target.remove(entity);
         //....
     }
 
@@ -379,6 +379,7 @@ impl WorldConsts {
 pub struct WorldVariables {
     pub is_playing: bool,
     pub last_click_point: Option<Vector2>,
+    pub is_click_detection: bool,
     pub state: GameState,
 }
 
@@ -387,6 +388,7 @@ impl WorldVariables {
         WorldVariables {
             is_playing: false,
             last_click_point: None,
+            is_click_detection: false,
             state: GameState::Title,
         }
     }

@@ -1,93 +1,11 @@
 use rand::Rng;
 
-use crate::{
-    structs::ecs::*,
-    structs::util::*,
-    user_consts::{self, *},
-    utils::*,
-    *,
-};
+use crate::{structs::ecs::*, structs::structs_util::*, user_consts::*, utils::*};
 
 use super::{
     sys_collision::{Circle, Collider, Rect, Shape},
     sys_draw::DrawParamater,
 };
-
-pub fn create_player(w: &mut World) {
-    let id = w.entities.instantiate_entity();
-    let entity = w.entities.get_mut(&id).unwrap();
-
-    let position = Vector2::new(
-        w.consts.canvas_x as f64 / 2.0,
-        w.consts.canvas_y as f64 / 2.0,
-    );
-
-    let transform = Transform {
-        position,
-        scale: 1.0,
-        velocity: Vector2::zero(),
-    };
-
-    w.transform.register(entity, transform);
-    w.group.register(entity, group::PLAYER);
-
-    let rect = Rect::new(BALL_SIZE, BALL_SIZE);
-    let collider = Collider::new(rect, *w.group.get_unchecked(&id), Vector2::zero());
-    w.collider.register(entity, vec![collider]);
-
-    let c = Circle::new(BALL_SIZE);
-    let draw_param = DrawParamater::new(js_color_rgba(0.0, 255.0, 255.0, 1.0), Shape::Circle(c));
-
-    w.draw_param.register(entity, draw_param);
-    w.destination.register(entity, vec![None]);
-    w.clock.register(entity, Clock::new());
-}
-
-pub fn player_move(w: &mut World) {
-    let entities = collect_entities_from_group(w, &group::PLAYER);
-    for entity_id in entities.iter() {
-        let mut dest = w.destination.get_unchecked(entity_id).clone();
-        let mut next_dest: Option<Vector2> = None;
-
-        if let Some(click_point) = w.vars.last_click_point {
-            if let Some(current_dest) = dest[0] {
-                if current_dest != click_point {
-                    next_dest = Some(click_point);
-                }
-            } else {
-                next_dest = Some(click_point);
-            }
-        }
-
-        if let Some(_) = next_dest {
-            dest[0] = next_dest;
-            w.destination.set(entity_id, dest);
-        }
-
-        if let Some(dest) = w.destination.get(entity_id) {
-            log(&format!("dest:{:?}", dest));
-            if let Some(next_dest) = dest[0] {
-                let mut transform = w.transform.get_unchecked(entity_id).clone();
-                let direction = (next_dest - transform.position).normalize();
-
-                transform.velocity = direction * 100.0;
-                w.transform.set(entity_id, transform);
-            }
-        }
-    }
-}
-
-pub fn player_attack(w: &mut World) {
-    let entities = collect_entities_from_group(w, &group::PLAYER);
-    for entity_id in entities.iter() {
-        let time = w.clock.get_unchecked(entity_id).time[0].unwrap();
-
-        if time > 1000.0 {
-            create_bullet(w, entity_id);
-            w.clock.get_unchecked_mut(entity_id).time_reset(0);
-        }
-    }
-}
 
 pub fn create_ball(w: &mut World) {
     //ボールのentityを作成し、戻り値でentityのidを得る
@@ -113,22 +31,25 @@ pub fn create_ball(w: &mut World) {
     });
 
     let transform = Transform {
+        id,
         position: pos,
         scale: 1.0,
         velocity: vel * 100.0,
+        parent: None,
+        children: None,
     };
 
     w.transform.register(entity, transform);
 
     let rect = Rect::new(BALL_SIZE, BALL_SIZE);
-    let collider = Collider::new(rect, group::BALL, Vector2::zero());
+    let collider = Collider::new(rect, Group::Ball, Vector2::zero());
     w.collider.register(entity, vec![collider]);
 
     let r = Rect::new(BALL_SIZE, BALL_SIZE);
     let draw_param = DrawParamater::new(js_color_rgba(255.0, 255.0, 255.0, 1.0), Shape::Rect(r));
 
     w.draw_param.register(entity, draw_param);
-    w.group.register(entity, group::BALL);
+    w.group.register(entity, Group::Ball);
     w.clock.register(entity, Clock::new());
 }
 
@@ -136,10 +57,10 @@ pub fn update_timer(w: &mut World) {
     let entities = collect_entities_from_archetype(&w, &[w.clock.id()]);
 
     for entity_id in entities.iter() {
-        let clock = w.clock.get(entity_id).unwrap().time.clone();
+        let clock = w.clock.get(entity_id).unwrap().timer.clone();
         for (index, time) in clock.iter().enumerate() {
             if let Some(t) = time {
-                w.clock.get_unchecked_mut(entity_id).time[index] = Some(t + w.consts.delta_time);
+                w.clock.get_unchecked_mut(entity_id).timer[index] = Some(t + w.consts.delta_time);
             }
         }
     }
@@ -159,7 +80,7 @@ pub fn position_update(w: &mut World) {
 }
 
 pub fn ball_reflection(w: &mut World) {
-    let entities = collect_entities_from_group(w, &group::BALL);
+    let entities = collect_entities_from_group(w, &Group::Ball);
     for entity_id in entities.iter() {
         let mut transform = w.transform.get(entity_id).unwrap().clone();
 
@@ -182,7 +103,7 @@ pub fn ball_reflection(w: &mut World) {
 }
 
 pub fn ball_move(w: &mut World) {
-    let entities = collect_entities_from_group(w, &group::BALL);
+    let entities = collect_entities_from_group(w, &Group::Ball);
     for entity_id in entities.iter() {
         let mut transform = w.transform.get(entity_id).unwrap().clone();
         let vel_mag = transform.velocity.magnitude();
@@ -237,40 +158,42 @@ fn burret_draw_param() -> DrawParamater {
         shape: Shape::Circle(c),
     }
 }
-pub fn create_bullet(w: &mut World, parent_id: &EntityId) {
+pub fn create_bullet(w: &mut World, parent_id: &EntityId) -> EntityId {
     let id = w.entities.instantiate_entity();
     let entity = w.entities.get_mut(&id).unwrap();
 
-    w.parent.register(entity, parent_id.clone());
+    let parent_transform = w.transform.get_unchecked_mut(parent_id);
 
-    let mut transform = w.transform.get(parent_id).unwrap().clone();
+    let mut transform = parent_transform.clone();
+    transform.set_parent(parent_transform);
 
-    //velocity初期化
+    transform.id = id;
 
     let mut vel = Vector2::normalize(&Vector2 { x: 1.0, y: 0.0 });
     vel = vel.rotate(90.0);
 
-    transform.velocity = vel;
+    transform.velocity = vel * 100.0;
     transform.scale = BULLET_SIZE;
 
     w.transform.register(entity, transform);
 
     w.draw_param.register(entity, burret_draw_param());
-    w.group.register(entity, group::BULLET);
+    w.group.register(entity, Group::Bullet);
     w.collider.register(entity, vec![]);
+    id
 }
 
 pub fn create_aim_bullet(w: &mut World, parent_id: &EntityId, direction: &Vector2) {
     let id = w.entities.instantiate_entity();
     let entity = w.entities.get_mut(&id).unwrap();
 
-    w.parent.register(entity, parent_id.clone());
-
-    //velocity初期化
     let vel = Vector2::normalize(direction);
 
-    let mut transform = w.transform.get_unchecked(parent_id).clone();
+    let parent_transform = w.transform.get_unchecked_mut(parent_id);
+    let mut transform = parent_transform.clone();
+    transform.set_parent(parent_transform);
 
+    transform.id = id;
     transform.position = transform.position + vel;
     transform.velocity = vel * 0.5;
     transform.scale = BULLET_SIZE;
@@ -278,7 +201,7 @@ pub fn create_aim_bullet(w: &mut World, parent_id: &EntityId, direction: &Vector
     w.transform.register(entity, transform);
 
     w.draw_param.register(entity, burret_draw_param());
-    w.group.register(entity, group::BULLET);
+    w.group.register(entity, Group::Bullet);
     w.collider.register(entity, vec![]);
 }
 
@@ -302,7 +225,7 @@ pub fn remove_out_of_bounds(w: &mut World) {
     }
 }
 
-pub fn nearest_target(w: &World, self_id: &EntityId, group: &usize) -> Option<(EntityId, Vector2)> {
+pub fn nearest_target(w: &World, self_id: &EntityId, group: &Group) -> Option<(EntityId, Vector2)> {
     let position = w.transform.get(self_id).unwrap().clone().position;
     let mut nearest_distance = std::f64::MAX;
     let mut nearest_target_tupple: Option<(EntityId, Vector2)> = None;
@@ -345,7 +268,7 @@ pub fn collect_entities_from_archetype(w: &World, values: &[ComponentId]) -> Vec
     w.entities.get_entities_from_archetype(&arche)
 }
 
-pub fn collect_entities_from_group(w: &World, group_id: &usize) -> Vec<EntityId> {
+pub fn collect_entities_from_group(w: &World, group_id: &Group) -> Vec<EntityId> {
     let mut group_entities = vec![];
 
     for entity in w.entities.entities.iter() {

@@ -5,7 +5,7 @@ use wasm_bindgen::JsValue;
 use super::{sys_collision::Shape, sys_main};
 use crate::{
     structs::ecs::*,
-    structs::util::*,
+    structs::structs_util::*,
     systems::sys_main::*,
     user_consts::{self, *},
 };

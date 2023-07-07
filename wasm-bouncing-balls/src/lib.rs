@@ -15,7 +15,7 @@ use html_cast::*;
 use js_sys::Math;
 use structs::{
     ecs::World,
-    util::{GameState, Vector2},
+    structs_util::{GameState, Vector2},
 };
 use systems::*;
 use utils::*;
@@ -226,14 +226,24 @@ fn update(balls: &mut RefMut<Vec<Ball>>, world: &mut World, input: &Rc<RefCell<I
             GameState::Title => update_title(world, input),
             GameState::Main => {
                 update_main(balls, world);
+                input_to_world(world, input);
                 game_loop::tick(world);
-                world.vars.last_click_point = input.borrow().click_point;
-                input.borrow_mut().clear_click_point();
             }
             GameState::GameOver => update_gameover(world, input),
             _ => (),
         }
     }
+    input_postprocess(world, input);
+}
+
+fn input_to_world(world: &mut World, input: &Rc<RefCell<Input>>) {
+    if world.vars.last_click_point != input.borrow().click_point {
+        world.vars.is_click_detection = true;
+        world.vars.last_click_point = input.borrow().click_point;
+    }
+}
+fn input_postprocess(world: &mut World, input: &Rc<RefCell<Input>>) {
+    world.vars.is_click_detection = false;
     input.borrow_mut().clear_click_point();
 }
 
@@ -262,7 +272,7 @@ fn update_title(world: &mut World, input: &Rc<RefCell<Input>>) {
             sys_main::create_ball(world);
         }
 
-        sys_main::create_player(world);
+        sys_player::create_player(world);
 
         log("Game Start!");
         world.vars.state = GameState::Main;

@@ -74,8 +74,8 @@ pub fn tick(w: &mut World) {
 
     sys_draw::draw(w, &ctx);
     sys_main::position_update(w);
-    sys_main::player_move(w);
-    sys_main::player_attack(w);
+    sys_player::player_move(w);
+    sys_player::player_attack(w);
     sys_main::ball_reflection(w);
     sys_main::remove_out_of_bounds(w);
     sys_main::check_gameover(w);

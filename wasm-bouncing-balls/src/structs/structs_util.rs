@@ -1,6 +1,10 @@
 use std::f64;
 use std::ops::{Add, Mul, Sub};
 
+use crate::log;
+
+use super::ecs::EntityId;
+
 #[derive(Copy, Clone, Debug, PartialEq, Default)]
 pub struct Vector2 {
     pub x: f64,
@@ -110,38 +114,110 @@ impl Add for Vector2 {
         }
     }
 }
-#[derive(Copy, Clone, Debug, PartialEq, Default)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Transform {
+    pub id: EntityId,
     pub position: Vector2,
     pub scale: f64,
     pub velocity: Vector2,
+    pub parent: Option<EntityId>,
+    pub children: Option<Vec<EntityId>>,
+}
+impl Transform {
+    pub fn new(id: EntityId) -> Self {
+        Transform {
+            id,
+            position: Vector2::zero(),
+            scale: 1.0,
+            velocity: Vector2::zero(),
+            parent: None,
+            children: None,
+        }
+    }
+    pub fn set_children(&mut self, child_transform: &mut Transform) {
+        child_transform.parent = Some(self.id);
+
+        match &mut self.children {
+            Some(children) => {
+                for i in children.iter() {
+                    if *i == child_transform.id {
+                        return;
+                    }
+                }
+                children.push(child_transform.id);
+            }
+            None => {
+                self.children = Some(vec![child_transform.id]);
+                return;
+            }
+        }
+    }
+
+    pub fn set_parent(&mut self, parent_transform: &mut Transform) {
+        self.parent = Some(parent_transform.id);
+
+        match &mut parent_transform.children {
+            Some(children) => {
+                for i in children.iter() {
+                    if *i == self.id {
+                        return;
+                    }
+                }
+                children.push(self.id);
+            }
+            None => {
+                parent_transform.children = Some(vec![self.id]);
+                return;
+            }
+        }
+    }
 }
 
 pub struct Clock {
-    pub time: Vec<Option<f64>>,
+    pub timer: Vec<Option<f64>>,
     pub alarm: Vec<Option<f64>>,
 }
 impl Clock {
     pub fn new() -> Self {
         Clock {
-            time: vec![Some(0.0)],
+            timer: vec![None],
             alarm: vec![None],
         }
     }
-    pub fn time_reset(&mut self, index: usize) {
-        if index >= self.time.len() {
+    pub fn timer_reset(&mut self, index: usize) {
+        if index >= self.timer.len() {
             panic!("index out of range");
         }
-        if let Some(_) = self.time[index] {
-            self.time[index] = Some(0.0);
+        if let Some(_) = self.timer[index] {
+            self.timer[index] = Some(0.0);
         }
     }
-    pub fn time_set(&mut self, time: f64, index: usize) {
-        if index >= self.time.len() {
+    pub fn timer_set(&mut self, time: f64, index: usize) {
+        if index >= self.timer.len() {
             panic!("index out of range");
         }
 
-        self.time[index] = Some(time);
+        self.timer[index] = Some(time);
+    }
+    pub fn timer_create(&mut self, index: usize) {
+        if index >= self.timer.len() {
+            for i in 0..index + 1 {
+                if i == self.timer.len() {
+                    self.timer.push(None);
+                }
+            }
+        }
+    }
+    pub fn timer_create_and_set(&mut self, time: f64, index: usize) {
+        if index >= self.timer.len() {
+            for i in 0..index + 1 {
+                if i == self.timer.len() {
+                    log("a");
+                    self.timer.push(None);
+                }
+            }
+        }
+        self.timer[index] = Some(time);
     }
 }
 
@@ -149,4 +225,12 @@ pub enum GameState {
     Title,
     Main,
     GameOver,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Group {
+    System,
+    Player,
+    Ball,
+    Bullet,
 }
