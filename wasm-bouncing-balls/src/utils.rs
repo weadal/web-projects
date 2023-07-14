@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{html_cast::*, structs::structs_util::Vector2};
+use crate::{html_cast::*, structs::structs_util::Vector2, systems::sys_collision::EntityAabb};
 use js_sys::Math;
 
 use crate::*;

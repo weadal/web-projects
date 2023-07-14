@@ -42,14 +42,14 @@ pub fn create_ball(w: &mut World) {
     w.transform.register(entity, transform);
 
     let rect = Rect::new(BALL_SIZE, BALL_SIZE);
-    let collider = Collider::new(rect, Group::Ball, Vector2::zero());
+    let collider = Collider::new(rect, Group::Enemy, Vector2::zero());
     w.collider.register(entity, vec![collider]);
 
     let r = Rect::new(BALL_SIZE, BALL_SIZE);
     let draw_param = DrawParamater::new(js_color_rgba(255.0, 255.0, 255.0, 1.0), Shape::Rect(r));
 
     w.draw_param.register(entity, draw_param);
-    w.group.register(entity, Group::Ball);
+    w.group.register(entity, Group::Enemy);
     w.clock.register(entity, Clock::new());
 }
 
@@ -80,7 +80,7 @@ pub fn position_update(w: &mut World) {
 }
 
 pub fn ball_reflection(w: &mut World) {
-    let entities = collect_entities_from_group(w, &Group::Ball);
+    let entities = collect_entities_from_group(w, &Group::Enemy);
     for entity_id in entities.iter() {
         let mut transform = w.transform.get(entity_id).unwrap().clone();
 
@@ -103,7 +103,7 @@ pub fn ball_reflection(w: &mut World) {
 }
 
 pub fn ball_move(w: &mut World) {
-    let entities = collect_entities_from_group(w, &Group::Ball);
+    let entities = collect_entities_from_group(w, &Group::Enemy);
     for entity_id in entities.iter() {
         let mut transform = w.transform.get(entity_id).unwrap().clone();
         let vel_mag = transform.velocity.magnitude();
@@ -179,7 +179,10 @@ pub fn create_bullet(w: &mut World, parent_id: &EntityId) -> EntityId {
 
     w.draw_param.register(entity, burret_draw_param());
     w.group.register(entity, Group::Bullet);
-    w.collider.register(entity, vec![]);
+
+    let rect = Rect::new(BULLET_SIZE, BULLET_SIZE);
+    let collider = Collider::new(rect, Group::Bullet, Vector2::zero());
+    w.collider.register(entity, vec![collider]);
     id
 }
 

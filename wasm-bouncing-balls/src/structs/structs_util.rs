@@ -1,7 +1,8 @@
 use std::f64;
-use std::ops::{Add, Mul, Sub};
+use std::ops::{Add, Index, Mul, Sub};
 
 use crate::log;
+use crate::user_consts::MAX_GROUP;
 
 use super::ecs::EntityId;
 
@@ -229,8 +230,46 @@ pub enum GameState {
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Group {
-    System,
-    Player,
-    Ball,
-    Bullet,
+    System = 0,
+    Player = 1,
+    Enemy = 2,
+    Bullet = 3,
+    Building = 4,
+    Item = 5,
+    None = MAX_GROUP as isize,
+}
+impl Group {
+    pub fn is_need_bvh(&self) -> bool {
+        match self {
+            Group::Enemy => return true,
+            Group::Bullet => return true,
+            Group::Building => return true,
+            Group::Item => return true,
+            _ => return false,
+        }
+    }
+    pub fn get_from_index(index: usize) -> Group {
+        match index {
+            0 => return Group::System,
+            1 => return Group::Player,
+            2 => return Group::Enemy,
+            3 => return Group::Bullet,
+            4 => return Group::Building,
+            5 => return Group::Item,
+            _ => return Group::None,
+        }
+    }
+
+    pub fn possible_contact_group(&self) -> Vec<Group> {
+        match self {
+            Group::Player => {
+                return vec![Group::Enemy, Group::Bullet, Group::Building, Group::Item]
+            }
+            Group::Enemy => return vec![Group::Bullet, Group::Player, Group::Building],
+            Group::Bullet => return vec![Group::Player, Group::Enemy, Group::Building],
+            Group::Building => return vec![Group::Player, Group::Enemy],
+            Group::Item => return vec![Group::Player],
+            _ => return vec![],
+        }
+    }
 }

@@ -73,6 +73,7 @@ pub fn tick(w: &mut World) {
         .unwrap();
 
     sys_draw::draw(w, &ctx);
+    sys_collision::Collision(w, &ctx);
     sys_main::position_update(w);
     sys_player::player_move(w);
     sys_player::player_attack(w);

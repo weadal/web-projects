@@ -14,10 +14,10 @@ use std::{
 use html_cast::*;
 use js_sys::Math;
 use structs::{
-    ecs::World,
+    ecs::{EntityId, World},
     structs_util::{GameState, Vector2},
 };
-use systems::*;
+use systems::{sys_collision::EntityAabb, *};
 use utils::*;
 use wasm_bindgen::prelude::*;
 
@@ -467,13 +467,21 @@ fn create_tree<'a>(
     node
 }
 
-struct Node<'a> {
+#[derive(Clone)]
+pub struct Node<'a> {
     left_child: Option<Box<Node<'a>>>,
     right_child: Option<Box<Node<'a>>>,
     balls: Vec<&'a Ball>,
     aabb: Aabb,
 }
 
+#[derive(Clone)]
+pub struct EcsNode {
+    left_child: Option<Box<EcsNode>>,
+    right_child: Option<Box<EcsNode>>,
+    entitiy_aabbs: Vec<EntityAabb>,
+    aabb: Aabb,
+}
 fn draw_aabb(ctx: &CanvasRenderingContext2d, aabb: &Aabb) {
     ctx.begin_path();
 

@@ -1,11 +1,14 @@
 use crate::structs::structs_util::*;
-use crate::systems::sys_collision::Collider;
+use crate::systems::sys_collision::{Collider, EntityAabb};
 use crate::systems::sys_draw::DrawParamater;
 use crate::user_consts::MAX_COMPONENTS;
+use crate::{EcsNode, Node};
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use std::ops::Deref;
+use std::rc::Rc;
 use std::vec;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -156,6 +159,15 @@ impl EntityManager {
         }
 
         None
+    }
+
+    pub fn has_component(&self, entity_id: &EntityId, comp_id: &ComponentId) -> bool {
+        let entity = &self.entities[entity_id.0];
+
+        match entity {
+            Some(e) => return e.archetype.is_component_include(*comp_id),
+            None => return false,
+        }
     }
 
     fn remove(&mut self, entity_id: &EntityId) {
@@ -381,6 +393,8 @@ pub struct WorldVariables {
     pub last_click_point: Option<Vector2>,
     pub is_click_detection: bool,
     pub state: GameState,
+    pub bvh: Vec<Option<EcsNode>>,
+    pub entity_aabbs: Vec<Option<Vec<EntityAabb>>>,
 }
 
 impl WorldVariables {
@@ -390,6 +404,8 @@ impl WorldVariables {
             last_click_point: None,
             is_click_detection: false,
             state: GameState::Title,
+            bvh: vec![None; Group::None as usize],
+            entity_aabbs: vec![None; Group::None as usize],
         }
     }
 }
