@@ -202,65 +202,6 @@ impl Aabb {
         }
     }
 
-    pub fn from_balls(balls: &Vec<Ball>) -> Aabb {
-        let mut x_max = -f64::INFINITY;
-        let mut x_min = f64::INFINITY;
-        let mut y_max = -f64::INFINITY;
-        let mut y_min = f64::INFINITY;
-
-        for ball in balls {
-            let aabb = ball.aabb();
-            if aabb.x_max > x_max {
-                x_max = aabb.x_max;
-            }
-            if aabb.x_min < x_min {
-                x_min = aabb.x_min;
-            }
-            if aabb.y_max > y_max {
-                y_max = aabb.y_max;
-            }
-            if aabb.y_min < y_min {
-                y_min = aabb.y_min
-            }
-        }
-
-        Aabb {
-            x_max,
-            x_min,
-            y_max,
-            y_min,
-        }
-    }
-    pub fn from_ballrefs(balls: &Vec<&Ball>) -> Aabb {
-        let mut x_max = -f64::INFINITY;
-        let mut x_min = f64::INFINITY;
-        let mut y_max = -f64::INFINITY;
-        let mut y_min = f64::INFINITY;
-
-        for ball in balls {
-            let aabb = ball.aabb();
-            if aabb.x_max > x_max {
-                x_max = aabb.x_max;
-            }
-            if aabb.x_min < x_min {
-                x_min = aabb.x_min;
-            }
-            if aabb.y_max > y_max {
-                y_max = aabb.y_max;
-            }
-            if aabb.y_min < y_min {
-                y_min = aabb.y_min
-            }
-        }
-
-        Aabb {
-            x_max,
-            x_min,
-            y_max,
-            y_min,
-        }
-    }
-
     pub fn is_intersects(&self, other: &Aabb) -> bool {
         if self.x_min > other.x_max {
             return false;
@@ -284,4 +225,23 @@ impl Aabb {
 
         x_size + y_size
     }
+}
+
+#[derive(Clone)]
+pub struct BvhNode {
+    pub left_child: Option<Box<BvhNode>>,
+    pub right_child: Option<Box<BvhNode>>,
+    pub entitiy_aabbs: Vec<EntityAabb>,
+    pub aabb: Aabb,
+}
+pub fn draw_aabb(ctx: &CanvasRenderingContext2d, aabb: &Aabb) {
+    ctx.begin_path();
+
+    ctx.move_to(aabb.x_min, aabb.y_min);
+    ctx.line_to(aabb.x_max, aabb.y_min);
+    ctx.line_to(aabb.x_max, aabb.y_max);
+    ctx.line_to(aabb.x_min, aabb.y_max);
+    ctx.line_to(aabb.x_min, aabb.y_min);
+
+    ctx.stroke();
 }

@@ -8,7 +8,7 @@ use crate::{
     systems::sys_main::*,
     user_consts::{self, *},
     utils::*,
-    Node, *,
+    *,
 };
 use web_sys::{
     console, CanvasRenderingContext2d, DomRect, HtmlButtonElement, HtmlCanvasElement,
@@ -144,16 +144,55 @@ pub fn Collision(w: &mut World, ctx: &CanvasRenderingContext2d) {
 }
 
 fn draw_bvh(w: &mut World, ctx: &CanvasRenderingContext2d) {
-    ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,255.0,0.0,0.4)"));
-    ctx.set_line_width(2.0);
-    let node = w.vars.bvh[Group::Enemy as usize].take().unwrap();
-    let node_box = Box::new(node);
+    for i in 0..MAX_GROUP {
+        let node = w.vars.bvh[i].take();
+        match node {
+            Some(n) => {
+                let group = Group::get_from_index(i);
 
-    draw_bvh_inner(&ctx, &node_box);
+                match group {
+                    Group::Enemy => {
+                        ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,255.0,0.0,0.4)"));
+                        ctx.set_line_width(2.0);
+                    }
+                    Group::Bullet => {
+                        ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,0.0,255.0,0.4)"));
+                        ctx.set_line_width(2.0);
+                    }
+                    _ => (),
+                }
 
-    w.vars.bvh[Group::Enemy as usize] = Some(*node_box);
+                let node_box = Box::new(n);
+                draw_bvh_inner(&ctx, &node_box);
+                w.vars.bvh[i] = Some(*node_box);
+            }
+            None => w.vars.bvh[i] = None,
+        }
+    }
+
+    // {
+    //     ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,255.0,0.0,0.4)"));
+    //     ctx.set_line_width(2.0);
+    //     let node = w.vars.bvh[Group::Enemy as usize].take().unwrap();
+    //     let node_box = Box::new(node);
+
+    //     draw_bvh_inner(&ctx, &node_box);
+
+    //     w.vars.bvh[Group::Enemy as usize] = Some(*node_box);
+    // }
+
+    // {
+    //     ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,0.0,255.0.0,0.4)"));
+    //     ctx.set_line_width(2.0);
+    //     let node = w.vars.bvh[Group::Bullet as usize].take().unwrap();
+    //     let node_box = Box::new(node);
+
+    //     draw_bvh_inner(&ctx, &node_box);
+
+    //     w.vars.bvh[Group::Bullet as usize] = Some(*node_box);
+    // }
 }
-fn draw_bvh_inner<'a>(ctx: &'a CanvasRenderingContext2d, node: &Box<EcsNode>) {
+fn draw_bvh_inner<'a>(ctx: &'a CanvasRenderingContext2d, node: &Box<BvhNode>) {
     draw_aabb(ctx, &node.aabb);
 
     //リーフノードでない場合、再帰的にツリーを降下する
@@ -197,14 +236,13 @@ fn create_bvh(w: &mut World) {
             entity_aabbs.push(entity_aabb);
         }
 
-        //w.vars.bvh[i] = Some(create_tree(entity_aabb_refs, &ctx, false));
         let bvh = Some(create_tree(entity_aabbs, false));
         w.vars.bvh[i] = bvh;
     }
 }
 fn get_contact_with<'a>(
     entity_aabb: &'a EntityAabb,
-    node: &Box<EcsNode>,
+    node: &Box<BvhNode>,
     entities_with_possible_contact: Rc<RefCell<Vec<(EntityId, EntityId)>>>,
 ) {
     //接触なし
@@ -240,14 +278,14 @@ fn get_contact_with<'a>(
     }
 }
 
-fn create_tree(entity_aabbs: Vec<EntityAabb>, y_axis_division: bool) -> EcsNode {
+fn create_tree(entity_aabbs: Vec<EntityAabb>, y_axis_division: bool) -> BvhNode {
     let aabbs = entity_aabbs.iter().map(|e| e.aabb).collect();
 
     let aabb = Aabb::from_aabbs(aabbs);
 
     //オブジェクト数が1つのAABBはそれ以上分類できないので決め打ちで葉要素として最終処理
     if entity_aabbs.len() == 1 {
-        return EcsNode {
+        return BvhNode {
             left_child: None,
             right_child: None,
             entitiy_aabbs: entity_aabbs,
@@ -315,7 +353,7 @@ fn create_tree(entity_aabbs: Vec<EntityAabb>, y_axis_division: bool) -> EcsNode 
         right_child = Some(Box::new(create_tree(right_entities, !y_axis_division)));
     }
 
-    let node = EcsNode {
+    let node = BvhNode {
         left_child,
         right_child,
         entitiy_aabbs: entity_aabbs,

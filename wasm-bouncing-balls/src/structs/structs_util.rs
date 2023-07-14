@@ -228,7 +228,7 @@ pub enum GameState {
     GameOver,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Group {
     System = 0,
     Player = 1,

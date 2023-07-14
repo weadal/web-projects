@@ -50,22 +50,11 @@ pub fn start() -> Result<(), JsValue> {
 
     canvas_setting(input.clone());
 
-    let balls: Vec<Ball> = Vec::new();
-    let balls_rc = Rc::new(RefCell::new(balls));
-
-    let balls_size = Number(
-        &query_selector_to::<HtmlInputElement>(".ball-field")
-            .unwrap()
-            .value(),
-    );
-
-    balls_init(&balls_rc, balls_size);
-
-    html_ui_setting(input.clone(), balls_rc.clone());
+    html_ui_setting(input.clone());
 
     input.borrow_mut().is_playing = true;
 
-    main_loop(balls_rc.clone(), input.clone());
+    main_loop(input.clone());
 
     Ok(())
 }
@@ -147,7 +136,7 @@ fn canvas_setting(input: Rc<RefCell<Input>>) {
 
     //canvas設定ここまで
 }
-fn html_ui_setting(input: Rc<RefCell<Input>>, balls_rc: Rc<RefCell<Vec<Ball>>>) {
+fn html_ui_setting(input: Rc<RefCell<Input>>) {
     let input_clone = input.clone();
     //一時停止ボタン
     {
@@ -155,24 +144,6 @@ fn html_ui_setting(input: Rc<RefCell<Input>>, balls_rc: Rc<RefCell<Vec<Ball>>>) 
         let closure: Closure<dyn FnMut()> =
             Closure::new(move || input_clone.borrow_mut().toggle_is_playing());
         play_button
-            .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
-            .unwrap();
-        closure.forget();
-    }
-    //ボール数変更UI
-    {
-        let balls_size_submit = query_selector_to::<HtmlInputElement>(".ball-submit").unwrap();
-
-        let balls_rc_clone = balls_rc.clone();
-        let closure: Closure<dyn FnMut()> = Closure::new(move || {
-            let balls_size = Number(
-                &query_selector_to::<HtmlInputElement>(".ball-field")
-                    .unwrap()
-                    .value(),
-            );
-            balls_init(&balls_rc_clone, balls_size);
-        });
-        balls_size_submit
             .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
             .unwrap();
         closure.forget();
@@ -195,7 +166,7 @@ fn html_ui_setting(input: Rc<RefCell<Input>>, balls_rc: Rc<RefCell<Vec<Ball>>>) 
     }
 }
 
-fn main_loop(balls_rc: Rc<RefCell<Vec<Ball>>>, input: Rc<RefCell<Input>>) {
+fn main_loop(input: Rc<RefCell<Input>>) {
     let closure: Rc<RefCell<Option<Closure<dyn FnMut()>>>> = Rc::new(RefCell::new(None));
     let closure_clone = closure.clone();
 
@@ -205,7 +176,7 @@ fn main_loop(balls_rc: Rc<RefCell<Vec<Ball>>>, input: Rc<RefCell<Input>>) {
 
     let input_rc_clone = input.clone();
     *closure_clone.borrow_mut() = Some(Closure::new(move || {
-        update(&mut balls_rc.borrow_mut(), &mut world, &input_rc_clone);
+        update(&mut world, &input_rc_clone);
         fps.render();
 
         world.consts.delta_time = fps.delta_time;
@@ -220,41 +191,28 @@ fn main_loop(balls_rc: Rc<RefCell<Vec<Ball>>>, input: Rc<RefCell<Input>>) {
     request_animation_frame(&closure_clone);
 }
 
-fn update(balls: &mut RefMut<Vec<Ball>>, world: &mut World, input: &Rc<RefCell<Input>>) {
+fn update(world: &mut World, input: &Rc<RefCell<Input>>) {
     if input.borrow().is_playing {
+        let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
+        let ctx = canvas
+            .get_context("2d")
+            .unwrap()
+            .unwrap()
+            .dyn_into::<CanvasRenderingContext2d>()
+            .unwrap();
+
         match world.vars.state {
-            GameState::Title => update_title(world, input),
-            GameState::Main => {
-                update_main(balls, world);
-                input_to_world(world, input);
-                game_loop::tick(world);
-            }
-            GameState::GameOver => update_gameover(world, input),
+            GameState::Title => update_title(world, input, &ctx),
+            GameState::Main => update_main(world, input, &ctx),
+            GameState::GameOver => update_gameover(world, input, &ctx),
             _ => (),
         }
     }
     input_postprocess(world, input);
 }
 
-fn input_to_world(world: &mut World, input: &Rc<RefCell<Input>>) {
-    if world.vars.last_click_point != input.borrow().click_point {
-        world.vars.is_click_detection = true;
-        world.vars.last_click_point = input.borrow().click_point;
-    }
-}
-fn input_postprocess(world: &mut World, input: &Rc<RefCell<Input>>) {
-    world.vars.is_click_detection = false;
-    input.borrow_mut().clear_click_point();
-}
-
-fn update_title(world: &mut World, input: &Rc<RefCell<Input>>) {
+fn update_title(world: &mut World, input: &Rc<RefCell<Input>>, ctx: &CanvasRenderingContext2d) {
     let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
-    let ctx = canvas
-        .get_context("2d")
-        .unwrap()
-        .unwrap()
-        .dyn_into::<CanvasRenderingContext2d>()
-        .unwrap();
 
     ctx.set_fill_style(&js_color_rgba(0.0, 0.0, 0.0, 1.0));
     ctx.fill_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
@@ -279,7 +237,7 @@ fn update_title(world: &mut World, input: &Rc<RefCell<Input>>) {
     }
 }
 
-fn update_gameover(world: &mut World, input: &Rc<RefCell<Input>>) {
+fn update_gameover(world: &mut World, input: &Rc<RefCell<Input>>, ctx: &CanvasRenderingContext2d) {
     let mut input = input.borrow_mut();
 
     log("Game Over! Click or Tap to Title");
@@ -291,281 +249,26 @@ fn update_gameover(world: &mut World, input: &Rc<RefCell<Input>>) {
     }
 }
 
-fn update_main(balls: &mut RefMut<Vec<Ball>>, world: &mut World) {
-    let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
-    let ctx = canvas
-        .get_context("2d")
-        .unwrap()
-        .unwrap()
-        .dyn_into::<CanvasRenderingContext2d>()
-        .unwrap();
-
+fn update_main(world: &mut World, input: &Rc<RefCell<Input>>, ctx: &CanvasRenderingContext2d) {
     ctx.set_fill_style(&js_color_rgba(0.0, 0.0, 0.0, 1.0));
-    ctx.fill_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
+    ctx.fill_rect(
+        0.0,
+        0.0,
+        world.consts.canvas_width as f64,
+        world.consts.canvas_height as f64,
+    );
 
-    let mut ballrefs: Vec<&Ball> = vec![];
-    for ball in balls.iter() {
-        ballrefs.push(ball.clone());
-    }
-
-    ctx.set_stroke_style(&JsValue::from_str("rgba(0.0,255.0,255.0,0.2)"));
-    ctx.set_line_width(2.0);
-
-    let loot_node = create_tree(ballrefs.clone(), &ctx, false);
-
-    let loot_node_box = Box::new(loot_node);
-    let balls_with_possible_contact: Rc<RefCell<Vec<(&Ball, &Ball)>>> =
-        Rc::new(RefCell::new(vec![]));
-
-    for ball in balls.iter() {
-        get_contact_with(&ball, &loot_node_box, balls_with_possible_contact.clone());
-    }
-
-    ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,0.0,0.0,1)"));
-    ctx.set_line_width(4.0);
-
-    for balls in balls_with_possible_contact.borrow().iter() {
-        let aabb = Aabb::from_ballrefs(&vec![balls.0, balls.1]);
-        draw_aabb(&ctx, &aabb);
-    }
-
-    //ここで狭域当たり判定
-
-    let delta_time = world.consts.delta_time;
-
-    for ball in balls.iter_mut() {
-        ball.draw(&ctx);
-        ball.moving(
-            world.consts.canvas_width as f64,
-            world.consts.canvas_height as f64,
-            &delta_time,
-        );
-    }
+    input_to_world(world, input);
+    game_loop::tick(world, ctx);
 }
 
-fn get_contact_with<'a>(
-    ball: &'a Ball,
-    node: &Box<Node<'a>>,
-    balls_with_possible_contact: Rc<RefCell<Vec<(&'a Ball, &'a Ball)>>>,
-) {
-    let ball_aabb = Aabb::from_circle(ball.x, ball.y, ball.size);
-
-    //接触なし
-    if !ball_aabb.is_intersects(&node.aabb) {
-        return;
-    }
-
-    //接触
-    if node.balls.len() == 1 {
-        if node.balls[0].id <= ball.id {
-            return;
-        }
-
-        balls_with_possible_contact
-            .borrow_mut()
-            .push((ball, node.balls[0]));
-
-        return;
-    }
-    //リーフノードでない場合、再帰的にツリーを降下する
-    else if node.balls.len() > 1 {
-        get_contact_with(
-            ball,
-            node.left_child.as_ref().unwrap(),
-            balls_with_possible_contact.clone(),
-        );
-
-        get_contact_with(
-            ball,
-            node.right_child.as_ref().unwrap(),
-            balls_with_possible_contact,
-        );
+fn input_to_world(world: &mut World, input: &Rc<RefCell<Input>>) {
+    if world.vars.last_click_point != input.borrow().click_point {
+        world.vars.is_click_detection = true;
+        world.vars.last_click_point = input.borrow().click_point;
     }
 }
-fn create_tree<'a>(
-    balls: Vec<&'a Ball>,
-    ctx: &'a CanvasRenderingContext2d,
-    y_axis_division: bool,
-) -> Node<'a> {
-    let aabb = Aabb::from_ballrefs(&balls);
-    draw_aabb(&ctx, &aabb);
-    //オブジェクト数が1つのAABBはそれ以上分類できないので決め打ちで葉要素として最終処理
-    if balls.len() == 1 {
-        return Node {
-            left_child: None,
-            right_child: None,
-            balls,
-            aabb,
-        };
-    }
-
-    //中点をAABBから取る関係上自身の軸サイズと自身が所属するAABBの軸サイズが一致すると右にも左にも分類できないオブジェクトが発生する
-    //例えば小さいオブジェクトが大きいオブジェクトの影に隠れる(同一y軸にはいる)形になると、大きいオブジェクトのmax_x,min_xがAABB全体のmax_x,min_xになってしまう
-    //そうしたときに間違って両方を同じサイドのchildに入れてしまうと無限ループが発生する(再帰呼び出しした先でも同じサイドのchildに入れられる)
-    //丸め誤差対策のために中心から+-0.5の範囲をセンターに入れてしまう 近接領域の当たりで多少の誤差が発生するけど1ピクセルより小さい領域での話なので事実上誤差は無いものとできるはず
-    let mut left_balls: Vec<&Ball> = vec![];
-    let mut right_balls: Vec<&Ball> = vec![];
-    let mut center_balls: Vec<&Ball> = vec![];
-
-    //フラグで分割する軸を変更
-    if y_axis_division {
-        let parent_center_y = (aabb.y_max + aabb.y_min) / 2.0;
-
-        for ball in balls.iter() {
-            if ball.y < parent_center_y + 0.5 && ball.y > parent_center_y - 0.5 {
-                center_balls.push(ball.clone());
-            } else if ball.y < parent_center_y {
-                left_balls.push(ball.clone());
-            } else if ball.y > parent_center_y {
-                right_balls.push(ball.clone());
-            } else {
-                center_balls.push(ball.clone());
-            }
-        }
-    } else {
-        let parent_center_x = (aabb.x_max + aabb.x_min) / 2.0;
-        for ball in balls.iter() {
-            if ball.x < parent_center_x + 0.5 && ball.x > parent_center_x - 0.5 {
-                center_balls.push(ball.clone());
-            } else if ball.x < parent_center_x {
-                left_balls.push(ball.clone());
-            } else if ball.x > parent_center_x {
-                right_balls.push(ball.clone());
-            } else {
-                center_balls.push(ball.clone());
-            }
-        }
-    }
-
-    //分類できないオブジェクトは、左右のchildを見て少ない方に入れることでオブジェクト数が2つだけのAABBになった場合のループを回避する
-    for ball in center_balls {
-        if left_balls.len() <= right_balls.len() {
-            left_balls.push(ball);
-        } else {
-            right_balls.push(ball);
-        }
-    }
-
-    let mut left_child = None;
-    let mut right_child = None;
-
-    if left_balls.len() > 0 {
-        //次回の分割方向は今回とは別の軸を使う(!y_axis_division)
-        left_child = Some(Box::new(create_tree(left_balls, &ctx, !y_axis_division)));
-    }
-    if right_balls.len() > 0 {
-        right_child = Some(Box::new(create_tree(right_balls, &ctx, !y_axis_division)));
-    }
-
-    let node = Node {
-        left_child,
-        right_child,
-        balls,
-        aabb,
-    };
-
-    node
-}
-
-#[derive(Clone)]
-pub struct Node<'a> {
-    left_child: Option<Box<Node<'a>>>,
-    right_child: Option<Box<Node<'a>>>,
-    balls: Vec<&'a Ball>,
-    aabb: Aabb,
-}
-
-#[derive(Clone)]
-pub struct EcsNode {
-    left_child: Option<Box<EcsNode>>,
-    right_child: Option<Box<EcsNode>>,
-    entitiy_aabbs: Vec<EntityAabb>,
-    aabb: Aabb,
-}
-fn draw_aabb(ctx: &CanvasRenderingContext2d, aabb: &Aabb) {
-    ctx.begin_path();
-
-    ctx.move_to(aabb.x_min, aabb.y_min);
-    ctx.line_to(aabb.x_max, aabb.y_min);
-    ctx.line_to(aabb.x_max, aabb.y_max);
-    ctx.line_to(aabb.x_min, aabb.y_max);
-    ctx.line_to(aabb.x_min, aabb.y_min);
-
-    ctx.stroke();
-}
-
-fn balls_init(balls_rc: &Rc<RefCell<Vec<Ball>>>, balls_size: i32) {
-    let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
-    balls_rc.borrow_mut().clear();
-
-    for i in 0..balls_size {
-        let size = random_f64(5.0, 10.0);
-        let ball = Ball::new(
-            random_f64(0.0 + size, canvas.width() as f64 - size),
-            random_f64(0.0 + size, canvas.height() as f64 - size),
-            random_f64(-2.0, 2.0),
-            random_f64(-2.0, 2.0),
-            random_rgb(),
-            size,
-            i,
-        );
-
-        balls_rc.borrow_mut().push(ball);
-    }
-}
-
-#[derive(Debug)]
-pub struct Ball {
-    x: f64,
-    y: f64,
-    vel_x: f64,
-    vel_y: f64,
-    color: JsValue,
-    size: f64,
-    id: i32,
-}
-impl Ball {
-    fn new(x: f64, y: f64, vel_x: f64, vel_y: f64, color: JsValue, size: f64, id: i32) -> Ball {
-        Ball {
-            x,
-            y,
-            vel_x,
-            vel_y,
-            color,
-            size,
-            id,
-        }
-    }
-    fn draw(&self, ctx: &CanvasRenderingContext2d) {
-        ctx.begin_path();
-        ctx.set_fill_style(&self.color);
-        ctx.arc(self.x, self.y, self.size, 0.0, 2.0 * std::f64::consts::PI)
-            .unwrap();
-        ctx.fill();
-    }
-
-    fn moving(&mut self, canvas_width: f64, canvas_height: f64, delta_time: &f64) {
-        if self.x + self.size >= canvas_width {
-            self.x = canvas_width - self.size;
-            self.vel_x = -self.vel_x;
-        }
-        if self.x - self.size <= 0.0 {
-            self.x = self.size;
-            self.vel_x = -self.vel_x;
-        }
-        if self.y + self.size >= canvas_height {
-            self.y = canvas_height - self.size;
-            self.vel_y = -self.vel_y;
-        }
-        if self.y - self.size <= 0.0 {
-            self.y = self.size;
-            self.vel_y = -self.vel_y;
-        }
-        self.x += self.vel_x * delta_time / 20.0;
-        self.y += self.vel_y * delta_time / 20.0;
-    }
-
-    fn aabb(&self) -> Aabb {
-        Aabb::from_circle(self.x, self.y, self.size)
-    }
+fn input_postprocess(world: &mut World, input: &Rc<RefCell<Input>>) {
+    world.vars.is_click_detection = false;
+    input.borrow_mut().clear_click_point();
 }

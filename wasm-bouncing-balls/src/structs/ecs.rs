@@ -2,7 +2,7 @@ use crate::structs::structs_util::*;
 use crate::systems::sys_collision::{Collider, EntityAabb};
 use crate::systems::sys_draw::DrawParamater;
 use crate::user_consts::MAX_COMPONENTS;
-use crate::{EcsNode, Node};
+use crate::BvhNode;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -393,7 +393,7 @@ pub struct WorldVariables {
     pub last_click_point: Option<Vector2>,
     pub is_click_detection: bool,
     pub state: GameState,
-    pub bvh: Vec<Option<EcsNode>>,
+    pub bvh: Vec<Option<BvhNode>>,
 }
 
 impl WorldVariables {
