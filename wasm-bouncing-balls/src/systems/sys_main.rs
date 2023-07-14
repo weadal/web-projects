@@ -14,8 +14,9 @@ pub fn create_ball(w: &mut World) {
 
     //position初期化
     let mut rng = rand::thread_rng();
-    let mut rand_x = rng.gen_range(BALL_SIZE * 2.0..w.consts.canvas_x as f64 - BALL_SIZE * 2.0);
-    let mut rand_y = rng.gen_range(BALL_SIZE * 2.0..w.consts.canvas_y as f64 - BALL_SIZE * 2.0);
+    let mut rand_x = rng.gen_range(BALL_SIZE * 2.0..w.consts.canvas_width as f64 - BALL_SIZE * 2.0);
+    let mut rand_y =
+        rng.gen_range(BALL_SIZE * 2.0..w.consts.canvas_height as f64 - BALL_SIZE * 2.0);
 
     let pos = Vector2 {
         x: rand_x as f64,
@@ -88,14 +89,22 @@ pub fn ball_reflection(w: &mut World) {
         let width = collider.shape.width;
         let height = collider.shape.height;
 
-        if transform.position.x <= width || transform.position.x >= w.consts.canvas_x as f64 - width
-        {
+        if transform.position.x <= width {
+            transform.position.x = width;
             transform.velocity.x = -transform.velocity.x;
         }
 
-        if transform.position.y <= height
-            || transform.position.y >= w.consts.canvas_y as f64 - height
-        {
+        if transform.position.x >= w.consts.canvas_width as f64 - width {
+            transform.position.x = w.consts.canvas_width as f64 - width;
+            transform.velocity.x = -transform.velocity.x;
+        }
+
+        if transform.position.y <= height {
+            transform.position.y = height;
+            transform.velocity.y = -transform.velocity.y;
+        }
+        if transform.position.y >= w.consts.canvas_height as f64 - height {
+            transform.position.y = w.consts.canvas_height as f64 - height;
             transform.velocity.y = -transform.velocity.y;
         }
         w.transform.set(entity_id, transform);
@@ -217,9 +226,9 @@ pub fn remove_out_of_bounds(w: &mut World) {
         let aabb = w.draw_param.get(entity_id).unwrap().shape.local_aabb();
 
         //とりあえず描画のAABBが画面外に出たら破棄する(コライダーのAABBは描画のAABBより小さいものとする)
-        if pos.x > w.consts.canvas_x as f64 + aabb.x_max
+        if pos.x > w.consts.canvas_width as f64 + aabb.x_max
             || pos.x < aabb.x_min
-            || pos.y > w.consts.canvas_y as f64 + aabb.y_max
+            || pos.y > w.consts.canvas_height as f64 + aabb.y_max
             || pos.y < aabb.y_min
         {
             w.remove_entity(entity_id);

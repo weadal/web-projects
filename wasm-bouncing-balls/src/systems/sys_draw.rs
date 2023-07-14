@@ -8,6 +8,7 @@ use crate::{
     structs::structs_util::*,
     systems::sys_main::*,
     user_consts::{self, *},
+    utils::*,
 };
 use web_sys::{
     console, CanvasRenderingContext2d, DomRect, HtmlButtonElement, HtmlCanvasElement,
@@ -26,6 +27,14 @@ impl DrawParamater {
 }
 
 pub fn draw(w: &mut World, ctx: &CanvasRenderingContext2d) {
+    // ctx.set_fill_style(&js_color_rgba(0.0, 0.0, 0.0, 1.0));
+    // ctx.fill_rect(
+    //     0.0,
+    //     0.0,
+    //     w.consts.canvas_width as f64,
+    //     w.consts.canvas_height as f64,
+    // );
+
     let entities = collect_entities_from_archetype(&w, &[w.draw_param.id()]);
 
     for entity_id in entities.iter() {

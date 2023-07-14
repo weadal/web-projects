@@ -375,15 +375,15 @@ impl World {
     }
 }
 pub struct WorldConsts {
-    pub canvas_x: u32,
-    pub canvas_y: u32,
+    pub canvas_width: u32,
+    pub canvas_height: u32,
     pub delta_time: f64,
 }
 impl WorldConsts {
     fn new() -> Self {
         WorldConsts {
-            canvas_x: 0,
-            canvas_y: 0,
+            canvas_width: 0,
+            canvas_height: 0,
             delta_time: 0.0,
         }
     }
@@ -394,7 +394,6 @@ pub struct WorldVariables {
     pub is_click_detection: bool,
     pub state: GameState,
     pub bvh: Vec<Option<EcsNode>>,
-    pub entity_aabbs: Vec<Option<Vec<EntityAabb>>>,
 }
 
 impl WorldVariables {
@@ -405,7 +404,6 @@ impl WorldVariables {
             is_click_detection: false,
             state: GameState::Title,
             bvh: vec![None; Group::None as usize],
-            entity_aabbs: vec![None; Group::None as usize],
         }
     }
 }

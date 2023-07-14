@@ -13,8 +13,8 @@ pub fn create_player(w: &mut World) {
     let entity = w.entities.get_mut(&id).unwrap();
 
     let position = Vector2::new(
-        w.consts.canvas_x as f64 / 2.0,
-        w.consts.canvas_y as f64 / 2.0,
+        w.consts.canvas_width as f64 / 2.0,
+        w.consts.canvas_height as f64 / 2.0,
     );
 
     let transform = Transform {

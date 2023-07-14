@@ -265,8 +265,8 @@ fn update_title(world: &mut World, input: &Rc<RefCell<Input>>) {
     if input.click_point != None {
         input.clear_click_point();
 
-        world.consts.canvas_x = canvas.width();
-        world.consts.canvas_y = canvas.height();
+        world.consts.canvas_width = canvas.width();
+        world.consts.canvas_height = canvas.height();
 
         for _ in 0..25 {
             sys_main::create_ball(world);
@@ -336,8 +336,8 @@ fn update_main(balls: &mut RefMut<Vec<Ball>>, world: &mut World) {
     for ball in balls.iter_mut() {
         ball.draw(&ctx);
         ball.moving(
-            world.consts.canvas_x as f64,
-            world.consts.canvas_y as f64,
+            world.consts.canvas_width as f64,
+            world.consts.canvas_height as f64,
             &delta_time,
         );
     }
