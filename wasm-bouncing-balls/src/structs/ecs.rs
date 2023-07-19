@@ -1,13 +1,13 @@
-use crate::structs::structs_util::*;
+use crate::structs::{structs_util::*, weapon::*};
 use crate::systems::sys_collision::{Collider, EntityAabb};
 use crate::systems::sys_draw::DrawParamater;
+use crate::systems::sys_player::PlayerVars;
 use crate::user_consts::MAX_COMPONENTS;
 use crate::BvhNode;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
 
@@ -331,6 +331,8 @@ pub struct World {
     pub group: Component<CompItem<Group>>,
     pub clock: Component<CompItem<Clock>>,
     pub target: Component<CompItem<Vec<Option<EntityId>>>>,
+    pub weapon: Component<CompItem<Vec<Option<Weapon>>>>,
+    pub player_vars: Component<CompItem<PlayerVars>>,
 }
 impl World {
     pub fn new() -> Self {
@@ -347,6 +349,8 @@ impl World {
             clock: Component::new(id_iter.next()),
             destination: Component::new(id_iter.next()),
             target: Component::new(id_iter.next()),
+            weapon: Component::new(id_iter.next()),
+            player_vars: Component::new(id_iter.next()),
         }
     }
 
@@ -366,6 +370,8 @@ impl World {
         self.clock.remove(entity);
         self.destination.remove(entity);
         self.target.remove(entity);
+        self.weapon.remove(entity);
+        self.player_vars.remove(entity);
         //....
     }
 

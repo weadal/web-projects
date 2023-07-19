@@ -1,6 +1,12 @@
 use rand::Rng;
 
-use crate::{structs::ecs::*, structs::structs_util::*, user_consts::*, utils::*, *};
+use crate::{
+    structs::ecs::*,
+    structs::{structs_util::*, weapon::*},
+    user_consts::*,
+    utils::*,
+    *,
+};
 
 use super::{
     sys_collision::{Circle, Collider, Rect, Shape},
@@ -10,6 +16,10 @@ use super::{
 
 pub fn create_player(w: &mut World) {
     let id = w.entities.instantiate_entity();
+
+    let weapons_id = sys_weapon::create_weapons(w, id);
+    let vars = PlayerVars { weapons_id };
+
     let entity = w.entities.get_mut(&id).unwrap();
 
     let position = Vector2::new(
@@ -44,9 +54,9 @@ pub fn create_player(w: &mut World) {
     clock.timer_create_and_set(0.0, p_timer::TARGETING_TIME);
     clock.timer_create_and_set(0.0, p_timer::ATTACK_DURATION_TIME);
 
-    log(&format!("len:{}", clock.timer.len()));
-
     w.clock.register(entity, clock);
+
+    w.player_vars.register(entity, vars);
 }
 
 //現状簡易的な移動
@@ -107,28 +117,32 @@ pub fn player_targeting(w: &mut World) {
     for entity_id in entities.iter() {}
 }
 
-pub fn player_attack(w: &mut World) {
-    let entities = collect_entities_from_group(w, &Group::Player);
-    for entity_id in entities.iter() {
-        let targeting_time = w.clock.get_unchecked(entity_id).timer[p_timer::TARGETING_TIME]
-            .unwrap()
-            .clone();
+// pub fn player_attack(w: &mut World) {
+//     let entities = collect_entities_from_group(w, &Group::Player);
+//     for entity_id in entities.iter() {
+//         let targeting_time = w.clock.get_unchecked(entity_id).timer[p_timer::TARGETING_TIME]
+//             .unwrap()
+//             .clone();
 
-        let attack_time = w.clock.get_unchecked(entity_id).timer[p_timer::ATTACK_DURATION_TIME]
-            .unwrap()
-            .clone();
+//         let attack_time = w.clock.get_unchecked(entity_id).timer[p_timer::ATTACK_DURATION_TIME]
+//             .unwrap()
+//             .clone();
 
-        if attack_time > 1000.0 {
-            create_bullet(w, entity_id);
-            w.clock
-                .get_unchecked_mut(entity_id)
-                .timer_reset(p_timer::ATTACK_DURATION_TIME);
-        }
-    }
-}
+//         if attack_time > 1000.0 {
+//             create_bullet(w, entity_id);
+//             w.clock
+//                 .get_unchecked_mut(entity_id)
+//                 .timer_reset(p_timer::ATTACK_DURATION_TIME);
+//         }
+//     }
+// }
 
 pub mod p_timer {
     pub const ALIVE_TIME: usize = 0;
     pub const TARGETING_TIME: usize = 1;
     pub const ATTACK_DURATION_TIME: usize = 2;
+}
+
+pub struct PlayerVars {
+    pub weapons_id: EntityId,
 }

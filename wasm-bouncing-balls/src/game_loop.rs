@@ -9,10 +9,14 @@ pub fn tick(w: &mut World, ctx: &CanvasRenderingContext2d) {
     //sys_main::create_ball_by_time(world);
 
     sys_draw::draw(w, ctx);
-    sys_collision::Collision(w, ctx);
+    sys_collision::collision(w, ctx);
     sys_main::position_update(w);
     sys_player::player_move(w);
-    sys_player::player_attack(w);
+    //sys_player::player_attack(w);
+
+    sys_weapon::time_increase(w);
+    sys_weapon::fire(w);
+
     sys_main::ball_reflection(w);
     sys_main::remove_out_of_bounds(w);
     sys_main::check_gameover(w);

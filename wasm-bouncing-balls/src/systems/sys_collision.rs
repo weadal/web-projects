@@ -99,7 +99,7 @@ pub struct EntityAabb {
     pub aabb: Aabb,
 }
 
-pub fn Collision(w: &mut World, ctx: &CanvasRenderingContext2d) {
+pub fn collision(w: &mut World, ctx: &CanvasRenderingContext2d) {
     //グループごとにvec<collisionTemp>を作成
     //それを使ってグループごとのBVHを作成しworldに格納
     create_bvh(w);

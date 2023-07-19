@@ -1,6 +1,11 @@
 use rand::Rng;
 
-use crate::{structs::ecs::*, structs::structs_util::*, user_consts::*, utils::*};
+use crate::{
+    structs::ecs::*,
+    structs::{structs_util::*, weapon::BulletParamater},
+    user_consts::*,
+    utils::*,
+};
 
 use super::{
     sys_collision::{Circle, Collider, Rect, Shape},
@@ -159,63 +164,6 @@ pub fn ball_move(w: &mut World) {
 //         }
 //     }
 // }
-
-fn burret_draw_param() -> DrawParamater {
-    let c = Circle::new(BULLET_SIZE);
-    DrawParamater {
-        color: js_color_rgba(255.0, 255.0, 255.0, 1.0),
-        shape: Shape::Circle(c),
-    }
-}
-pub fn create_bullet(w: &mut World, parent_id: &EntityId) -> EntityId {
-    let id = w.entities.instantiate_entity();
-    let entity = w.entities.get_mut(&id).unwrap();
-
-    let parent_transform = w.transform.get_unchecked_mut(parent_id);
-
-    let mut transform = parent_transform.clone();
-    transform.set_parent(parent_transform);
-
-    transform.id = id;
-
-    let mut vel = Vector2::normalize(&Vector2 { x: 1.0, y: 0.0 });
-    vel = vel.rotate(90.0);
-
-    transform.velocity = vel * 100.0;
-    transform.scale = BULLET_SIZE;
-
-    w.transform.register(entity, transform);
-
-    w.draw_param.register(entity, burret_draw_param());
-    w.group.register(entity, Group::Bullet);
-
-    let rect = Rect::new(BULLET_SIZE, BULLET_SIZE);
-    let collider = Collider::new(rect, Group::Bullet, Vector2::zero());
-    w.collider.register(entity, vec![collider]);
-    id
-}
-
-pub fn create_aim_bullet(w: &mut World, parent_id: &EntityId, direction: &Vector2) {
-    let id = w.entities.instantiate_entity();
-    let entity = w.entities.get_mut(&id).unwrap();
-
-    let vel = Vector2::normalize(direction);
-
-    let parent_transform = w.transform.get_unchecked_mut(parent_id);
-    let mut transform = parent_transform.clone();
-    transform.set_parent(parent_transform);
-
-    transform.id = id;
-    transform.position = transform.position + vel;
-    transform.velocity = vel * 0.5;
-    transform.scale = BULLET_SIZE;
-
-    w.transform.register(entity, transform);
-
-    w.draw_param.register(entity, burret_draw_param());
-    w.group.register(entity, Group::Bullet);
-    w.collider.register(entity, vec![]);
-}
 
 pub fn remove_out_of_bounds(w: &mut World) {
     //暫定的にコライダー持ちをすべて処理(将来的にコライダーを持ったフィールド外のオブジェクトが欲しくなるかも)
