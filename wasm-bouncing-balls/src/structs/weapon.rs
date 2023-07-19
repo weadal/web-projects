@@ -23,7 +23,7 @@ impl Weapon {
     pub fn new(parent_id: EntityId) -> Self {
         let mut weapon = Weapon {
             parent_id,
-            is_active: true,
+            is_active: false,
             name: String::from("noname"),
             damage: 100,
             range: 100,
@@ -36,7 +36,7 @@ impl Weapon {
         weapon.bullet_param.scale = BULLET_SIZE;
         weapon.bullet_param.velocity = 100.0;
 
-        log(&format!("weapon_create:{:?}", parent_id));
+        log(&format!("weapon_create_for:{:?}", parent_id));
 
         weapon
     }

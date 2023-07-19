@@ -86,13 +86,13 @@ pub fn player_move(w: &mut World) {
 
                 //到着処理
                 if transform.position.distance(&next_dest) <= 2.0 {
-                    w.destination.set(entity_id, vec![None]);
+                    w.destination.set(entity_id, Some(vec![None]));
                     transform.velocity = Vector2::zero();
                 } else {
                     let direction = (next_dest - transform.position).normalize();
                     transform.velocity = direction * 100.0;
                 }
-                w.transform.set(entity_id, transform);
+                w.transform.set(entity_id, Some(transform));
             }
         }
     }
@@ -122,7 +122,7 @@ fn player_next_destination_set(w: &mut World, entity_id: &EntityId) {
 
     if let Some(_) = next_dest {
         dest[0] = next_dest;
-        w.destination.set(entity_id, dest);
+        w.destination.set(entity_id, Some(dest));
     }
 }
 
@@ -148,29 +148,30 @@ pub fn player_attack(w: &mut World) {
         };
 
         let contact_entities = sys_collision::get_contact_with_group(w, entity_aabb, Group::Enemy);
+        let vars = w.player_vars.get_unchecked(entity_id);
 
         //暫定的に最もレンジの長い武器が接触判定したらすべての武器をアクティブにする
         //そもそもこの処理自体毎フレーム行うようなものじゃないので後でいい感じにしたい
-        // match contact_entities {
-        //     Some(_) => {
-        //         let mut weapons = w.weapon.take(entity_id);
-        //         for weapon in weapons.iter_mut() {
-        //             if let Some(wp) = weapon {
-        //                 wp.is_active = true;
-        //             }
-        //         }
-        //         w.weapon.set(entity_id, weapons);
-        //     }
-        //     None => {
-        //         let mut weapons = w.weapon.take(entity_id);
-        //         for weapon in weapons.iter_mut() {
-        //             if let Some(wp) = weapon {
-        //                 wp.is_active = false;
-        //             }
-        //         }
-        //         w.weapon.set(entity_id, weapons);
-        //     }
-        // }
+        match contact_entities {
+            Some(_) => {
+                let mut weapons = w.weapon.take_unchecked(&vars.weapons_id);
+                for weapon in weapons.iter_mut() {
+                    if let Some(wp) = weapon {
+                        wp.is_active = true;
+                    }
+                }
+                w.weapon.set(&vars.weapons_id, Some(weapons));
+            }
+            None => {
+                let mut weapons = w.weapon.take_unchecked(&vars.weapons_id);
+                for weapon in weapons.iter_mut() {
+                    if let Some(wp) = weapon {
+                        wp.is_active = false;
+                    }
+                }
+                w.weapon.set(&vars.weapons_id, Some(weapons));
+            }
+        }
     }
 }
 

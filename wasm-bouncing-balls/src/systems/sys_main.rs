@@ -81,7 +81,7 @@ pub fn position_update(w: &mut World) {
 
         transform.position.x += vel.x * w.consts.delta_time / 1000.0;
         transform.position.y += vel.y * w.consts.delta_time / 1000.0;
-        w.transform.set(entity_id, transform);
+        w.transform.set(entity_id, Some(transform));
     }
 }
 
@@ -112,7 +112,7 @@ pub fn ball_reflection(w: &mut World) {
             transform.position.y = w.consts.canvas_height as f64 - height;
             transform.velocity.y = -transform.velocity.y;
         }
-        w.transform.set(entity_id, transform);
+        w.transform.set(entity_id, Some(transform));
     }
 }
 
@@ -124,7 +124,7 @@ pub fn ball_move(w: &mut World) {
         let right = transform.velocity.right() * 0.02;
         transform.velocity = transform.velocity + right;
         transform.velocity = Vector2::normalize(&transform.velocity) * vel_mag;
-        w.transform.set(entity_id, transform);
+        w.transform.set(entity_id, Some(transform));
     }
 }
 
@@ -185,35 +185,35 @@ pub fn remove_out_of_bounds(w: &mut World) {
     }
 }
 
-pub fn nearest_target(w: &World, self_id: &EntityId, group: &Group) -> Option<(EntityId, Vector2)> {
-    let position = w.transform.get(self_id).unwrap().clone().position;
-    let mut nearest_distance = std::f64::MAX;
-    let mut nearest_target_tupple: Option<(EntityId, Vector2)> = None;
+// pub fn nearest_target(w: &World, self_id: &EntityId, group: &Group) -> Option<(EntityId, Vector2)> {
+//     let position = w.transform.get(self_id).unwrap().clone().position;
+//     let mut nearest_distance = std::f64::MAX;
+//     let mut nearest_target_tupple: Option<(EntityId, Vector2)> = None;
 
-    for value in w.transform.items.iter() {
-        if value.id == *self_id {
-            continue;
-        }
+//     for value in w.transform.items.iter() {
+//         if value.id == *self_id {
+//             continue;
+//         }
 
-        match w.group.get(&value.id) {
-            None => continue,
-            Some(ref_group) => {
-                if ref_group != group {
-                    continue;
-                }
-            }
-        }
+//         match w.group.get(&value.id) {
+//             None => continue,
+//             Some(ref_group) => {
+//                 if ref_group != group {
+//                     continue;
+//                 }
+//             }
+//         }
 
-        let ref_distance = (value.item.position - position).sqr_magnitude();
+//         let ref_distance = (value.item.position - position).sqr_magnitude();
 
-        if nearest_distance > ref_distance {
-            nearest_distance = ref_distance;
-            nearest_target_tupple = Some((value.id, value.item.position));
-        }
-    }
+//         if nearest_distance > ref_distance {
+//             nearest_distance = ref_distance;
+//             nearest_target_tupple = Some((value.id, value.item.position));
+//         }
+//     }
 
-    nearest_target_tupple
-}
+//     nearest_target_tupple
+// }
 
 pub fn check_gameover(w: &mut World) {
     //暫定的に全エンティティがいなくなったらゲームオーバー

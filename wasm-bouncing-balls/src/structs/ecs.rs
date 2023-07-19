@@ -177,20 +177,19 @@ impl EntityManager {
 
 pub struct CompItem<T> {
     pub id: EntityId,
-    pub item: T,
+    pub item: Option<T>,
 }
 
-pub struct Component<TestCompItem> {
+pub struct Component<CompItem> {
     id: ComponentId,
     id_index_map: HashMap<EntityId, usize>,
-    pub items: Vec<TestCompItem>,
+    pub items: Vec<CompItem>,
 }
 impl<T> Component<CompItem<T>> {
     pub fn get(&self, entity_id: &EntityId) -> Option<&T> {
         let index = self.id_index_map.get(entity_id);
-
         match index {
-            Some(value) => return Some(&self.items[*value].item),
+            Some(i) => return self.items[*i].item.as_ref(),
             None => return None,
         }
     }
@@ -199,38 +198,54 @@ impl<T> Component<CompItem<T>> {
         let index = self.id_index_map.get(entity_id);
 
         match index {
-            Some(value) => return Some(&mut self.items[*value].item),
+            Some(i) => return self.items[*i].item.as_mut(),
             None => return None,
         }
     }
 
     pub fn get_unchecked(&self, entity_id: &EntityId) -> &T {
         let index = self.id_index_map.get(entity_id);
-        &self.items[*index.unwrap()].item
+        self.items[*index.unwrap()].item.as_ref().unwrap()
     }
     pub fn get_unchecked_mut(&mut self, entity_id: &EntityId) -> &mut T {
         let index = self.id_index_map.get(entity_id);
-        &mut self.items[*index.unwrap()].item
+        self.items[*index.unwrap()].item.as_mut().unwrap()
+    }
+    pub fn take(&mut self, entity_id: &EntityId) -> Option<T> {
+        let index = self.id_index_map.get(entity_id);
+
+        match index {
+            Some(i) => {
+                let item = self.items[*i].item.take();
+                return item;
+            }
+            None => return None,
+        }
+    }
+    pub fn take_unchecked(&mut self, entity_id: &EntityId) -> T {
+        let index = self.id_index_map.get(entity_id);
+        let item = self.items[*index.unwrap()].item.take().unwrap();
+        return item;
     }
 
     pub fn get_from_index(&self, index: usize) -> Option<&T> {
         if self.items.len() <= index {
             return None;
         }
-        return Some(&self.items[index].item);
+        return self.items[index].item.as_ref();
     }
 
-    pub fn get_mut_from_index(&mut self, index: usize) -> Option<&T> {
+    pub fn get_mut_from_index(&mut self, index: usize) -> Option<&mut T> {
         if self.items.len() <= index {
             return None;
         }
-        return Some(&mut self.items[index].item);
+        return self.items[index].item.as_mut();
     }
 
-    pub fn set(&mut self, entity_id: &EntityId, value: T) {
+    pub fn set(&mut self, entity_id: &EntityId, value: Option<T>) {
         let index = self.id_index_map.get(&entity_id);
-        if let Some(v) = index {
-            self.items[*v].item = value;
+        if let Some(i) = index {
+            self.items[*i].item = value;
             return;
         }
 
@@ -247,7 +262,7 @@ impl<T> Component<CompItem<T>> {
     {
         self.items.push(CompItem {
             id: entity_id,
-            item: (T::default()),
+            item: Some(T::default()),
         });
 
         self.items.len() - 1
@@ -255,7 +270,7 @@ impl<T> Component<CompItem<T>> {
     fn push_with_item(&mut self, entity_id: EntityId, item: T) -> usize {
         self.items.push(CompItem {
             id: entity_id,
-            item: (item),
+            item: Some(item),
         });
 
         self.items.len() - 1
