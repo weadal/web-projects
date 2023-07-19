@@ -130,7 +130,12 @@ pub fn collision(w: &mut World, ctx: &CanvasRenderingContext2d) {
                         entitis_with_possible_contact.clone();
                     let bvh_box = Box::new(n);
 
-                    get_contact_with(&entity_aabb, &bvh_box, entities_with_possible_contact_clone);
+                    get_contact_with(
+                        &entity_aabb,
+                        &bvh_box,
+                        entities_with_possible_contact_clone,
+                        true,
+                    );
 
                     w.vars.bvh[i] = Some(*bvh_box);
                 }
@@ -240,10 +245,13 @@ fn create_bvh(w: &mut World) {
         w.vars.bvh[i] = bvh;
     }
 }
+
+//全部のentityをid順に走査する場合ignore_lower_idをtrueにすると重複を無視する(自身より若いidのentityを処理する際にすでに衝突検出が行われている)
 fn get_contact_with<'a>(
     entity_aabb: &'a EntityAabb,
     node: &Box<BvhNode>,
     entities_with_possible_contact: Rc<RefCell<Vec<(EntityId, EntityId)>>>,
+    ignore_lower_id: bool,
 ) {
     //接触なし
     if !entity_aabb.aabb.is_intersects(&node.aabb) {
@@ -252,7 +260,8 @@ fn get_contact_with<'a>(
 
     //接触
     if node.entitiy_aabbs.len() == 1 {
-        if node.entitiy_aabbs[0].entity_id <= entity_aabb.entity_id {
+        //ignore_lower_idがtrueの場合、自身より若いidのentityとの接触を無視する
+        if (node.entitiy_aabbs[0].entity_id <= entity_aabb.entity_id) && ignore_lower_id {
             return;
         }
 
@@ -268,12 +277,14 @@ fn get_contact_with<'a>(
             entity_aabb,
             node.left_child.as_ref().unwrap(),
             entities_with_possible_contact.clone(),
+            ignore_lower_id,
         );
 
         get_contact_with(
             entity_aabb,
             node.right_child.as_ref().unwrap(),
             entities_with_possible_contact,
+            ignore_lower_id,
         );
     }
 }
@@ -361,4 +372,42 @@ fn create_tree(entity_aabbs: Vec<EntityAabb>, y_axis_division: bool) -> BvhNode 
     };
 
     node
+}
+
+pub fn get_contact_with_group(
+    w: &mut World,
+    entity_aabb: EntityAabb,
+    group: Group,
+) -> Option<Vec<EntityId>> {
+    let mut contact_entities: Vec<EntityId> = vec![];
+    let entitis_with_possible_contact: Rc<RefCell<Vec<(EntityId, EntityId)>>> =
+        Rc::new(RefCell::new(vec![]));
+
+    //unwrap()による二重参照を回避するためにOption.take()で所有権をぶんどる
+    let node = w.vars.bvh[group as usize].take();
+    match node {
+        Some(n) => {
+            let entities_with_possible_contact_clone = entitis_with_possible_contact.clone();
+            let bvh_box = Box::new(n);
+
+            get_contact_with(
+                &entity_aabb,
+                &bvh_box,
+                entities_with_possible_contact_clone,
+                false,
+            );
+
+            w.vars.bvh[group as usize] = Some(*bvh_box);
+        }
+        None => w.vars.bvh[group as usize] = None,
+    }
+
+    if entitis_with_possible_contact.borrow().len() > 0 {
+        for i in entitis_with_possible_contact.borrow().iter() {
+            contact_entities.push(i.1);
+        }
+        return Some(contact_entities);
+    } else {
+        return None;
+    }
 }

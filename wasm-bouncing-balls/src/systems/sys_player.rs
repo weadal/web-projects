@@ -20,6 +20,16 @@ pub fn create_player(w: &mut World) {
     let weapons_id = sys_weapon::create_weapons(w, id);
     let vars = PlayerVars { weapons_id };
 
+    let mut range = 0;
+
+    for weapon in w.weapon.get_unchecked(&weapons_id) {
+        if let Some(wp) = weapon {
+            if wp.range > range {
+                range = wp.range;
+            }
+        }
+    }
+
     let entity = w.entities.get_mut(&id).unwrap();
 
     let position = Vector2::new(
@@ -40,8 +50,13 @@ pub fn create_player(w: &mut World) {
     w.group.register(entity, Group::Player);
 
     let rect = Rect::new(BALL_SIZE, BALL_SIZE);
-    let collider = Collider::new(rect, *w.group.get_unchecked(&id), Vector2::zero());
-    w.collider.register(entity, vec![collider]);
+    let collider_self = Collider::new(rect, *w.group.get_unchecked(&id), Vector2::zero());
+
+    let rect = Rect::new(range as f64, range as f64);
+    let collider_range = Collider::new(rect, *w.group.get_unchecked(&id), Vector2::zero());
+
+    w.collider
+        .register(entity, vec![collider_self, collider_range]);
 
     let c = Circle::new(BALL_SIZE);
     let draw_param = DrawParamater::new(js_color_rgba(0.0, 255.0, 255.0, 1.0), Shape::Circle(c));
@@ -52,7 +67,6 @@ pub fn create_player(w: &mut World) {
     let mut clock = Clock::new();
     clock.timer_create_and_set(0.0, p_timer::ALIVE_TIME);
     clock.timer_create_and_set(0.0, p_timer::TARGETING_TIME);
-    clock.timer_create_and_set(0.0, p_timer::ATTACK_DURATION_TIME);
 
     w.clock.register(entity, clock);
 
@@ -117,30 +131,68 @@ pub fn player_targeting(w: &mut World) {
     for entity_id in entities.iter() {}
 }
 
-// pub fn player_attack(w: &mut World) {
-//     let entities = collect_entities_from_group(w, &Group::Player);
-//     for entity_id in entities.iter() {
-//         let targeting_time = w.clock.get_unchecked(entity_id).timer[p_timer::TARGETING_TIME]
-//             .unwrap()
-//             .clone();
+pub fn player_attack(w: &mut World) {
+    let entities = collect_entities_from_group(w, &Group::Player);
+    for entity_id in entities.iter() {
+        let targeting_time = w.clock.get_unchecked(entity_id).timer[p_timer::TARGETING_TIME]
+            .unwrap()
+            .clone();
 
-//         let attack_time = w.clock.get_unchecked(entity_id).timer[p_timer::ATTACK_DURATION_TIME]
-//             .unwrap()
-//             .clone();
+        let transform = w.transform.get_unchecked(entity_id);
+        let collider = w.collider.get_unchecked(entity_id);
 
-//         if attack_time > 1000.0 {
-//             create_bullet(w, entity_id);
-//             w.clock
-//                 .get_unchecked_mut(entity_id)
-//                 .timer_reset(p_timer::ATTACK_DURATION_TIME);
-//         }
-//     }
-// }
+        let entity_aabb = EntityAabb {
+            entity_id: entity_id.clone(),
+            position: transform.position,
+            aabb: collider[p_collider::MAX_RANGE].aabb(transform.position),
+        };
+
+        let contact_entities = sys_collision::get_contact_with_group(w, entity_aabb, Group::Enemy);
+
+        //暫定的に最もレンジの長い武器が接触判定したらすべての武器をアクティブにする
+        //そもそもこの処理自体毎フレーム行うようなものじゃないので後でいい感じにしたい
+        // match contact_entities {
+        //     Some(_) => {
+        //         let mut weapons = w.weapon.take(entity_id);
+        //         for weapon in weapons.iter_mut() {
+        //             if let Some(wp) = weapon {
+        //                 wp.is_active = true;
+        //             }
+        //         }
+        //         w.weapon.set(entity_id, weapons);
+        //     }
+        //     None => {
+        //         let mut weapons = w.weapon.take(entity_id);
+        //         for weapon in weapons.iter_mut() {
+        //             if let Some(wp) = weapon {
+        //                 wp.is_active = false;
+        //             }
+        //         }
+        //         w.weapon.set(entity_id, weapons);
+        //     }
+        // }
+    }
+}
+
+pub fn draw_player_range(w: &mut World, ctx: &CanvasRenderingContext2d) {
+    ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,255.0,255.0,0.4)"));
+    ctx.set_line_width(2.0);
+
+    let entities = collect_entities_from_group(w, &Group::Player);
+    for entity_id in entities.iter() {
+        let pos = w.transform.get_unchecked(entity_id).position;
+        let aabb = w.collider.get_unchecked(entity_id)[p_collider::MAX_RANGE].aabb(pos);
+        draw_aabb(ctx, &aabb);
+    }
+}
 
 pub mod p_timer {
     pub const ALIVE_TIME: usize = 0;
     pub const TARGETING_TIME: usize = 1;
-    pub const ATTACK_DURATION_TIME: usize = 2;
+}
+pub mod p_collider {
+    pub const SELF: usize = 0;
+    pub const MAX_RANGE: usize = 1;
 }
 
 pub struct PlayerVars {
