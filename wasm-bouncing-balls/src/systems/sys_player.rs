@@ -133,22 +133,23 @@ pub fn player_targeting(w: &mut World) {
 
 pub fn player_attack(w: &mut World) {
     let entities = collect_entities_from_group(w, &Group::Player);
-    for entity_id in entities.iter() {
-        let targeting_time = w.clock.get_unchecked(entity_id).timer[p_timer::TARGETING_TIME]
+    for player_entity_id in entities.iter() {
+        let targeting_time = w.clock.get_unchecked(player_entity_id).timer[p_timer::TARGETING_TIME]
             .unwrap()
             .clone();
 
-        let transform = w.transform.get_unchecked(entity_id);
-        let collider = w.collider.get_unchecked(entity_id);
+        let transform = w.transform.get_unchecked(player_entity_id);
+        let collider = w.collider.get_unchecked(player_entity_id);
 
-        let entity_aabb = EntityAabb {
-            entity_id: entity_id.clone(),
+        let player_range_aabb = EntityAabb {
+            entity_id: player_entity_id.clone(),
             position: transform.position,
             aabb: collider[p_collider::MAX_RANGE].aabb(transform.position),
         };
 
-        let contact_entities = sys_collision::get_contact_with_group(w, entity_aabb, Group::Enemy);
-        let vars = w.player_vars.get_unchecked(entity_id);
+        let contact_entities =
+            sys_collision::get_contact_with_group(w, player_range_aabb, Group::Enemy);
+        let vars = w.player_vars.get_unchecked(player_entity_id);
 
         //暫定的に最もレンジの長い武器が接触判定したらすべての武器をアクティブにする
         //そもそもこの処理自体毎フレーム行うようなものじゃないので後でいい感じにしたい

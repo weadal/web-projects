@@ -59,6 +59,42 @@ pub fn create_ball(w: &mut World) {
     w.clock.register(entity, Clock::new());
 }
 
+pub fn create_building(w: &mut World, position: &Vector2) {
+    //ボールのentityを作成し、戻り値でentityのidを得る
+    let id = w.entities.instantiate_entity();
+    let entity = w.entities.get_mut(&id).unwrap();
+
+    //position初期化
+
+    let pos = Vector2 {
+        x: position.x,
+        y: position.y,
+    };
+
+    //velocity初期化
+
+    let transform = Transform {
+        id,
+        position: pos,
+        scale: 1.0,
+        velocity: Vector2::zero(),
+        parent: None,
+        children: None,
+    };
+
+    w.transform.register(entity, transform);
+
+    let rect = Rect::new(100.0, 100.0);
+    let collider = Collider::new(rect, Group::Building, Vector2::zero());
+    w.collider.register(entity, vec![collider]);
+
+    let rect = Rect::new(100.0, 100.0);
+    let draw_param = DrawParamater::new(js_color_rgba(255.0, 255.0, 0.0, 1.0), Shape::Rect(rect));
+
+    w.draw_param.register(entity, draw_param);
+    w.group.register(entity, Group::Building);
+    w.clock.register(entity, Clock::new());
+}
 pub fn update_timer(w: &mut World) {
     let entities = collect_entities_from_archetype(&w, &[w.clock.id()]);
 

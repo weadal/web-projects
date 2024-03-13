@@ -265,9 +265,20 @@ fn update_main(world: &mut World, input: &Rc<RefCell<Input>>, ctx: &CanvasRender
 fn input_to_world(world: &mut World, input: &Rc<RefCell<Input>>) {
     if world.vars.last_click_point != input.borrow().click_point {
         world.vars.is_click_detection = true;
+
+        if world.vars.is_stop == true {
+            sys_main::create_building(world, &input.borrow().click_point.unwrap());
+            world.vars.is_stop = false;
+        }
+
         world.vars.last_click_point = input.borrow().click_point;
     }
+
+    if input.borrow().mouse_down_time > 200.0 {
+        world.vars.is_stop = true;
+    }
 }
+
 fn input_postprocess(world: &mut World, input: &Rc<RefCell<Input>>) {
     world.vars.is_click_detection = false;
     input.borrow_mut().clear_click_point();
