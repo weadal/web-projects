@@ -21,7 +21,10 @@ pub struct Collider {
     pub shape: Rect,
     pub group: Group,
     pub offset: Vector2,
-    pub targets: Option<Vec<EntityId>>,
+    pub targets: Vec<EntityId>,
+    pub targets_temp: Vec<EntityId>,
+    pub targets_enter: Vec<EntityId>,
+    pub targets_left: Vec<EntityId>,
 }
 
 impl Collider {
@@ -30,7 +33,10 @@ impl Collider {
             shape,
             group,
             offset,
-            targets: None,
+            targets: vec![],
+            targets_temp: vec![],
+            targets_enter: vec![],
+            targets_left: vec![],
         }
     }
     pub fn aabb(&self, pos: Vector2) -> Aabb {
@@ -41,7 +47,45 @@ impl Collider {
             y_min: pos.y - (self.shape.height / 2.0),
         }
     }
+
+    pub fn add_target(&mut self, target: &EntityId) {
+        self.targets_temp.push(target.clone());
+    }
+
+    pub fn targets_submit(&mut self) {
+        self.targets_enter.clear();
+        self.targets_left.clear();
+
+        if self.targets.len() == 0 {
+            self.targets = self.targets_temp.clone();
+            self.targets_enter = self.targets_temp.clone();
+            self.targets_temp.clear();
+            return;
+        }
+
+        let mut next_targets: Vec<EntityId> = vec![];
+
+        for t in self.targets_temp.iter() {
+            match self.targets.binary_search(t) {
+                Ok(index) => {
+                    next_targets.push(*t);
+
+                    self.targets.remove(index);
+                }
+                Err(_) => {
+                    next_targets.push(*t);
+
+                    self.targets_enter.push(*t);
+                }
+            }
+        }
+
+        self.targets_left = self.targets.clone();
+        self.targets = next_targets;
+        self.targets_temp.clear();
+    }
 }
+
 #[derive(Clone, Debug)]
 pub struct Circle {
     pub radius: f64,
@@ -144,6 +188,12 @@ pub fn collision(w: &mut World, ctx: &CanvasRenderingContext2d) {
         }
     }
 
+    //狭域当たり判定 これもしかしてソートされない状態になる？
+    for pair in entitis_with_possible_contact.borrow().iter() {
+        w.collider.get_unchecked_mut(&pair.0)[0].add_target(&pair.1);
+        w.collider.get_unchecked_mut(&pair.1)[0].add_target(&pair.0);
+    }
+
     draw_bvh(w, ctx);
     //各々の当たり判定処理は別のsystemで行う
 }
@@ -162,6 +212,10 @@ fn draw_bvh(w: &mut World, ctx: &CanvasRenderingContext2d) {
                     }
                     Group::Bullet => {
                         ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,0.0,255.0,0.4)"));
+                        ctx.set_line_width(2.0);
+                    }
+                    Group::Building => {
+                        ctx.set_stroke_style(&JsValue::from_str("rgba(0.0,255.0,0.0,0.4)"));
                         ctx.set_line_width(2.0);
                     }
                     _ => (),
@@ -260,8 +314,10 @@ fn get_contact_with<'a>(
 
     //接触
     if node.entitiy_aabbs.len() == 1 {
-        //ignore_lower_idがtrueの場合、自身より若いidのentityとの接触を無視する
-        if (node.entitiy_aabbs[0].entity_id <= entity_aabb.entity_id) && ignore_lower_id {
+        //ignore_lower_idがtrueの場合、自身より若いidのentityとの接触を無視する, 自身との当たり判定を無視する
+        if { ({ node.entitiy_aabbs[0].entity_id < entity_aabb.entity_id }) && ignore_lower_id }
+            || node.entitiy_aabbs[0].entity_id == entity_aabb.entity_id
+        {
             return;
         }
 
@@ -409,5 +465,205 @@ pub fn get_contact_with_group(
         return Some(contact_entities);
     } else {
         return None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::structs::structs_util::Group;
+    use crate::systems::sys_collision;
+
+    #[test]
+    #[ignore = "reason"]
+    fn target_submit_test() {
+        let rect = Rect::new(100.0, 100.0);
+        let mut collider = Collider::new(rect, Group::Building, Vector2::zero());
+
+        collider.add_target(&EntityId(1));
+        collider.add_target(&EntityId(3));
+        collider.add_target(&EntityId(5));
+        collider.add_target(&EntityId(7));
+
+        collider.targets_submit();
+
+        println!("temp{:?}", collider.targets_temp);
+        println!("now{:?}", collider.targets);
+        println!("enter{:?}", collider.targets_enter);
+        println!("left{:?}", collider.targets_left);
+
+        collider.add_target(&EntityId(2));
+        collider.add_target(&EntityId(3));
+        collider.add_target(&EntityId(4));
+        collider.add_target(&EntityId(5));
+
+        collider.targets_submit();
+
+        println!("temp{:?}", collider.targets_temp);
+        println!("now{:?}", collider.targets);
+        println!("enter{:?}", collider.targets_enter);
+        println!("left{:?}", collider.targets_left);
+    }
+
+    fn test_collision(w: &mut World) {
+        //グループごとにvec<collisionTemp>を作成
+        //それを使ってグループごとのBVHを作成しworldに格納
+        create_bvh(w);
+
+        let entitis_with_possible_contact: Rc<RefCell<Vec<(EntityId, EntityId)>>> =
+            Rc::new(RefCell::new(vec![]));
+
+        //colliderコンポーネントへ衝突対象を書き込み
+        let entities = collect_entities_from_archetype(&w, &[w.collider.id()]);
+
+        println!("{:?}", entities);
+
+        for entity_id in entities.iter() {
+            let position = w.transform.get_unchecked(entity_id).position;
+            //暫定的に複数コライダーには非対応
+            let aabb = w.collider.get_unchecked(entity_id)[0].aabb(position);
+
+            let entity_aabb = EntityAabb {
+                entity_id: *entity_id,
+                position,
+                aabb,
+            };
+
+            //すべてのグループのBVHに対して衝突問い合わせをする
+            for i in 0..MAX_GROUP {
+                //unwrap()による二重参照を回避するためにOption.take()で所有権をぶんどる
+                let node = w.vars.bvh[i].take();
+                match node {
+                    Some(n) => {
+                        let entities_with_possible_contact_clone =
+                            entitis_with_possible_contact.clone();
+                        let bvh_box = Box::new(n);
+
+                        get_contact_with(
+                            &entity_aabb,
+                            &bvh_box,
+                            entities_with_possible_contact_clone,
+                            false,
+                        );
+
+                        w.vars.bvh[i] = Some(*bvh_box);
+                    }
+                    None => w.vars.bvh[i] = None,
+                }
+            }
+        }
+
+        println!("{:?}", entitis_with_possible_contact.borrow());
+
+        //狭域当たり判定 これもしかしてソートされない状態になる？
+        for pair in entitis_with_possible_contact.borrow().iter() {
+            w.collider.get_unchecked_mut(&pair.1)[0].add_target(&pair.0);
+            println!(
+                "{:?}に{:?}を追加 現在のtemp:{:?}",
+                &pair.1,
+                &pair.0,
+                w.collider.get_unchecked(&pair.1)[0].targets_temp
+            );
+        }
+
+        for i in entities {
+            let a = w.collider.get_unchecked_mut(&i);
+            println!(
+                "{:?} temp{:?} enter{:?},stay{:?},left{:?}",
+                i, a[0].targets_temp, a[0].targets_enter, a[0].targets, a[0].targets_left
+            );
+
+            a[0].targets_submit();
+
+            println!(
+                "{:?} temp{:?} enter{:?},stay{:?},left{:?}",
+                i, a[0].targets_temp, a[0].targets_enter, a[0].targets, a[0].targets_left
+            );
+        }
+    }
+
+    pub fn test_create_ball(w: &mut World) {
+        //ボールのentityを作成し、戻り値でentityのidを得る
+        let id = w.entities.instantiate_entity();
+        let entity = w.entities.get_mut(&id).unwrap();
+
+        //position初期化
+        let mut rng = rand::thread_rng();
+        let mut rand_x =
+            rng.gen_range(BALL_SIZE * 2.0..w.consts.canvas_width as f64 - BALL_SIZE * 2.0);
+        let mut rand_y =
+            rng.gen_range(BALL_SIZE * 2.0..w.consts.canvas_height as f64 - BALL_SIZE * 2.0);
+
+        let pos = Vector2 {
+            x: rand_x as f64,
+            y: rand_y as f64,
+        };
+
+        //velocity初期化
+        rand_x = rng.gen_range(-1.0..1.0);
+        rand_y = rng.gen_range(-1.0..1.0);
+        let vel = Vector2::normalize(&Vector2 {
+            x: rand_x,
+            y: rand_y,
+        });
+
+        let transform = Transform {
+            id,
+            position: pos,
+            scale: 1.0,
+            velocity: vel * 100.0,
+            parent: None,
+            children: None,
+        };
+
+        w.transform.register(entity, transform);
+
+        let rect = Rect::new(BALL_SIZE, BALL_SIZE);
+        let collider = Collider::new(rect, Group::Enemy, Vector2::zero());
+        w.collider.register(entity, vec![collider]);
+
+        w.group.register(entity, Group::Enemy);
+        w.clock.register(entity, Clock::new());
+    }
+    #[test]
+    fn world_collision_test() {
+        let mut w = crate::structs::ecs::World::new();
+        w.consts.canvas_width = 150;
+        w.consts.canvas_height = 150;
+
+        for _ in 0..10 {
+            test_create_ball(&mut w);
+        }
+        println!("Frame:1");
+        test_collision(&mut w);
+        println!("================================");
+
+        let entities = collect_entities_from_archetype(&w, &[w.collider.id()]);
+        for entity in entities {
+            let c = w.collider.get_unchecked(&entity)[0].clone();
+            println!("{:?}のtemp:{:?}", entity, c.targets_temp);
+        }
+
+        let entities = collect_entities_from_archetype(&w, &[w.transform.id()]);
+        for entity in entities {
+            //position初期化
+            let mut rng = rand::thread_rng();
+            let mut rand_x =
+                rng.gen_range(BALL_SIZE * 2.0..w.consts.canvas_width as f64 - BALL_SIZE * 2.0);
+            let mut rand_y =
+                rng.gen_range(BALL_SIZE * 2.0..w.consts.canvas_height as f64 - BALL_SIZE * 2.0);
+
+            let pos = Vector2 {
+                x: rand_x as f64,
+                y: rand_y as f64,
+            };
+
+            w.transform.get_unchecked_mut(&entity).position = pos
+        }
+
+        println!("================================");
+        println!("Frame:2");
+        test_collision(&mut w);
     }
 }

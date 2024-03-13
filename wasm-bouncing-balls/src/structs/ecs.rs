@@ -413,6 +413,7 @@ pub struct WorldVariables {
     pub is_playing: bool,
     pub last_click_point: Option<Vector2>,
     pub is_click_detection: bool,
+    pub is_stop: bool,
     pub state: GameState,
     pub bvh: Vec<Option<BvhNode>>,
 }
@@ -423,8 +424,24 @@ impl WorldVariables {
             is_playing: false,
             last_click_point: None,
             is_click_detection: false,
+            is_stop: false,
             state: GameState::Title,
             bvh: vec![None; Group::None as usize],
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn world_test() {
+        let mut world = World::new();
+        let id = world.entities.instantiate_entity();
+        let id_1 = world.entities.instantiate_entity();
+        assert_eq!(id.0, 0);
+        assert_eq!(id_1.0, 1);
     }
 }

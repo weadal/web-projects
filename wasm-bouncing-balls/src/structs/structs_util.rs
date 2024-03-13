@@ -260,16 +260,57 @@ impl Group {
         }
     }
 
-    pub fn possible_contact_group(&self) -> Vec<Group> {
+    pub fn possible_contact_groups(&self) -> Vec<Group> {
         match self {
+            Group::System => {
+                return vec![
+                    Group::System,
+                    Group::Player,
+                    Group::Enemy,
+                    Group::Bullet,
+                    Group::Building,
+                    Group::Item,
+                ]
+            }
             Group::Player => {
                 return vec![Group::Enemy, Group::Bullet, Group::Building, Group::Item]
             }
-            Group::Enemy => return vec![Group::Bullet, Group::Player, Group::Building],
+            Group::Enemy => {
+                return vec![Group::Enemy, Group::Bullet, Group::Player, Group::Building]
+            }
             Group::Bullet => return vec![Group::Player, Group::Enemy, Group::Building],
             Group::Building => return vec![Group::Player, Group::Enemy],
             Group::Item => return vec![Group::Player],
             _ => return vec![],
         }
+    }
+
+    pub fn is_possible_contact_group(&self, group: Group) -> bool {
+        let possible_contact_groups = self.possible_contact_groups();
+        for ref_group in possible_contact_groups {
+            if group == ref_group {
+                return true;
+            }
+        }
+        false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::structs::structs_util::Group;
+
+    #[test]
+    fn contact_group_test() {
+        let g0 = Group::System;
+        let g1 = Group::Player;
+        let g2 = Group::Enemy;
+        let g3 = Group::Bullet;
+        let g4 = Group::Building;
+        let g5 = Group::Item;
+
+        assert!(g2.is_possible_contact_group(g3));
     }
 }
