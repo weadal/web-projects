@@ -22,6 +22,7 @@ pub struct Collider {
     pub group: Group,
     pub offset: Vector2,
     pub targets: Vec<EntityId>,
+    pub target_infos: Vec<CollisionInfo>,
     pub targets_temp: Vec<EntityId>,
     pub targets_enter: Vec<EntityId>,
     pub targets_left: Vec<EntityId>,
@@ -34,6 +35,7 @@ impl Collider {
             group,
             offset,
             targets: vec![],
+            target_infos: vec![],
             targets_temp: vec![],
             targets_enter: vec![],
             targets_left: vec![],
@@ -64,12 +66,12 @@ impl Collider {
         }
 
         let mut next_targets: Vec<EntityId> = vec![];
+        let mut next_target_infos: Vec<CollisionInfo> = vec![];
 
         for t in self.targets_temp.iter() {
             match self.targets.binary_search(t) {
                 Ok(index) => {
                     next_targets.push(*t);
-
                     self.targets.remove(index);
                 }
                 Err(_) => {
@@ -143,6 +145,15 @@ pub struct EntityAabb {
     pub aabb: Aabb,
 }
 
+#[derive(Clone, Debug)]
+pub struct CollisionInfo {
+    pub target_id: EntityId,
+    pub target_group: Group,
+    pub target_aabb: Aabb,
+    pub point: Vector2,
+    pub direction: Direction,
+}
+
 pub fn collision(w: &mut World, ctx: &CanvasRenderingContext2d) {
     //グループごとにvec<collisionTemp>を作成
     //それを使ってグループごとのBVHを作成しworldに格納
@@ -174,12 +185,7 @@ pub fn collision(w: &mut World, ctx: &CanvasRenderingContext2d) {
                         entitis_with_possible_contact.clone();
                     let bvh_box = Box::new(n);
 
-                    get_contact_with(
-                        &entity_aabb,
-                        &bvh_box,
-                        entities_with_possible_contact_clone,
-                        true,
-                    );
+                    get_contact_with(&entity_aabb, &bvh_box, entities_with_possible_contact_clone);
 
                     w.vars.bvh[i] = Some(*bvh_box);
                 }
@@ -188,14 +194,79 @@ pub fn collision(w: &mut World, ctx: &CanvasRenderingContext2d) {
         }
     }
 
-    //狭域当たり判定 これもしかしてソートされない状態になる？
+    //狭域当たり判定　頑張れば上の方の処理とまとめてもうちょい参照の回数減らせそうだけど暫定的に冗長性持たせとく
     for pair in entitis_with_possible_contact.borrow().iter() {
-        w.collider.get_unchecked_mut(&pair.0)[0].add_target(&pair.1);
+        let collision_info = narrow_collision_check(w, &pair.1, &pair.0);
+        match collision_info {
+            Ok(info) => w.collider.get_unchecked_mut(&pair.1)[0]
+                .target_infos
+                .push(info),
+            Err(_) => (),
+        }
+
         w.collider.get_unchecked_mut(&pair.1)[0].add_target(&pair.0);
     }
 
-    draw_bvh(w, ctx);
+    for i in entities {
+        let a = w.collider.get_unchecked_mut(&i);
+        a[0].targets_submit();
+    }
+
+    //draw_bvh(w, ctx);
     //各々の当たり判定処理は別のsystemで行う
+}
+
+fn narrow_collision_check(
+    w: &World,
+    entity: &EntityId,
+    target: &EntityId,
+) -> Result<CollisionInfo, &'static str> {
+    //暫定的に1つ目のコライダーだけを処理
+    let entity_collider = w.collider.get_unchecked(&entity)[0].clone();
+    let entity_transform = w.transform.get_unchecked(&entity).clone();
+    let entity_aabb = entity_collider.aabb(entity_transform.position);
+    let target_collider = w.collider.get_unchecked(&target)[0].clone();
+    let target_transform = w.transform.get_unchecked(&target).clone();
+    let target_aabb = target_collider.aabb(target_transform.position);
+
+    let mut collision_info = CollisionInfo {
+        target_id: *target,
+        target_group: target_collider.group,
+        target_aabb,
+        point: Vector2::zero(),
+        direction: Direction::North,
+    };
+
+    if entity_aabb.x_min <= target_aabb.x_max {
+        collision_info.direction = Direction::West;
+        collision_info.point.x = target_aabb.x_max;
+        collision_info.point.y = (entity_transform.position.y + target_transform.position.y) / 2.0;
+
+        return Ok(collision_info);
+    }
+    if entity_aabb.x_max >= target_aabb.x_min {
+        collision_info.direction = Direction::East;
+        collision_info.point.x = target_aabb.x_min;
+        collision_info.point.y = (entity_transform.position.y + target_transform.position.y) / 2.0;
+
+        return Ok(collision_info);
+    }
+    if entity_aabb.y_min <= target_aabb.y_max {
+        collision_info.direction = Direction::North;
+        collision_info.point.x = (entity_transform.position.x + target_transform.position.x) / 2.0;
+        collision_info.point.y = target_aabb.y_max;
+
+        return Ok(collision_info);
+    }
+    if entity_aabb.y_max < target_aabb.y_min {
+        collision_info.direction = Direction::South;
+        collision_info.point.x = (entity_transform.position.x + target_transform.position.x) / 2.0;
+        collision_info.point.y = target_aabb.y_min;
+
+        return Ok(collision_info);
+    }
+
+    Err("接触なし")
 }
 
 fn draw_bvh(w: &mut World, ctx: &CanvasRenderingContext2d) {
@@ -305,7 +376,6 @@ fn get_contact_with<'a>(
     entity_aabb: &'a EntityAabb,
     node: &Box<BvhNode>,
     entities_with_possible_contact: Rc<RefCell<Vec<(EntityId, EntityId)>>>,
-    ignore_lower_id: bool,
 ) {
     //接触なし
     if !entity_aabb.aabb.is_intersects(&node.aabb) {
@@ -314,10 +384,8 @@ fn get_contact_with<'a>(
 
     //接触
     if node.entitiy_aabbs.len() == 1 {
-        //ignore_lower_idがtrueの場合、自身より若いidのentityとの接触を無視する, 自身との当たり判定を無視する
-        if { ({ node.entitiy_aabbs[0].entity_id < entity_aabb.entity_id }) && ignore_lower_id }
-            || node.entitiy_aabbs[0].entity_id == entity_aabb.entity_id
-        {
+        //自身との当たり判定を無視する
+        if node.entitiy_aabbs[0].entity_id == entity_aabb.entity_id {
             return;
         }
 
@@ -333,14 +401,12 @@ fn get_contact_with<'a>(
             entity_aabb,
             node.left_child.as_ref().unwrap(),
             entities_with_possible_contact.clone(),
-            ignore_lower_id,
         );
 
         get_contact_with(
             entity_aabb,
             node.right_child.as_ref().unwrap(),
             entities_with_possible_contact,
-            ignore_lower_id,
         );
     }
 }
@@ -446,12 +512,7 @@ pub fn get_contact_with_group(
             let entities_with_possible_contact_clone = entitis_with_possible_contact.clone();
             let bvh_box = Box::new(n);
 
-            get_contact_with(
-                &entity_aabb,
-                &bvh_box,
-                entities_with_possible_contact_clone,
-                false,
-            );
+            get_contact_with(&entity_aabb, &bvh_box, entities_with_possible_contact_clone);
 
             w.vars.bvh[group as usize] = Some(*bvh_box);
         }
@@ -521,8 +582,10 @@ mod tests {
 
         for entity_id in entities.iter() {
             let position = w.transform.get_unchecked(entity_id).position;
+
             //暫定的に複数コライダーには非対応
-            let aabb = w.collider.get_unchecked(entity_id)[0].aabb(position);
+            let col = &mut w.collider.get_unchecked_mut(entity_id)[0];
+            let aabb = col.aabb(position);
 
             let entity_aabb = EntityAabb {
                 entity_id: *entity_id,
@@ -544,7 +607,6 @@ mod tests {
                             &entity_aabb,
                             &bvh_box,
                             entities_with_possible_contact_clone,
-                            false,
                         );
 
                         w.vars.bvh[i] = Some(*bvh_box);
@@ -552,34 +614,71 @@ mod tests {
                     None => w.vars.bvh[i] = None,
                 }
             }
+
+            //colliderを拾ってきたタイミングで先にinfoを初期化しておく
+            col.target_infos.clear();
         }
 
         println!("{:?}", entitis_with_possible_contact.borrow());
 
-        //狭域当たり判定 これもしかしてソートされない状態になる？
+        //狭域当たり判定　頑張れば上の方の処理とまとめてもうちょい参照の回数減らせそうだけど暫定的に冗長性持たせとく
         for pair in entitis_with_possible_contact.borrow().iter() {
+            let collision_info = narrow_collision_check(w, &pair.1, &pair.0);
+
+            println!(
+                "info_id:{:?}",
+                collision_info.clone().ok().unwrap().target_id
+            );
+            match collision_info {
+                Ok(info) => w.collider.get_unchecked_mut(&pair.1)[0]
+                    .target_infos
+                    .push(info),
+                Err(_) => (),
+            }
+
             w.collider.get_unchecked_mut(&pair.1)[0].add_target(&pair.0);
+
             println!(
                 "{:?}に{:?}を追加 現在のtemp:{:?}",
                 &pair.1,
                 &pair.0,
                 w.collider.get_unchecked(&pair.1)[0].targets_temp
             );
+
+            let mut infos: Vec<EntityId> = vec![];
+
+            for i in w.collider.get_unchecked_mut(&pair.1)[0]
+                .target_infos
+                .clone()
+            {
+                infos.push(i.target_id);
+            }
+            println!("{:?}のcollision_info{:?}", pair.1, infos);
         }
 
         for i in entities {
             let a = w.collider.get_unchecked_mut(&i);
-            println!(
-                "{:?} temp{:?} enter{:?},stay{:?},left{:?}",
-                i, a[0].targets_temp, a[0].targets_enter, a[0].targets, a[0].targets_left
-            );
+
+            // println!(
+            //     "{:?} temp{:?} enter{:?},stay{:?},left{:?}",
+            //     i, a[0].targets_temp, a[0].targets_enter, a[0].targets, a[0].targets_left
+            // );
 
             a[0].targets_submit();
 
+            let mut infos: Vec<EntityId> = vec![];
+
+            for i in a[0].target_infos.clone() {
+                infos.push(i.target_id);
+            }
+            println!("{:?}のcollision_info{:?}", i, infos);
+
             println!(
                 "{:?} temp{:?} enter{:?},stay{:?},left{:?}",
                 i, a[0].targets_temp, a[0].targets_enter, a[0].targets, a[0].targets_left
             );
+
+            println!("");
         }
     }
 

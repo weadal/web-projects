@@ -275,9 +275,7 @@ impl Group {
             Group::Player => {
                 return vec![Group::Enemy, Group::Bullet, Group::Building, Group::Item]
             }
-            Group::Enemy => {
-                return vec![Group::Enemy, Group::Bullet, Group::Player, Group::Building]
-            }
+            Group::Enemy => return vec![Group::Bullet, Group::Player, Group::Building],
             Group::Bullet => return vec![Group::Player, Group::Enemy, Group::Building],
             Group::Building => return vec![Group::Player, Group::Enemy],
             Group::Item => return vec![Group::Player],
@@ -294,6 +292,14 @@ impl Group {
         }
         false
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum Direction {
+    North,
+    East,
+    South,
+    West,
 }
 
 #[cfg(test)]
