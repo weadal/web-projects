@@ -1,4 +1,4 @@
-use std::clone;
+use std::{clone, fmt::format};
 
 use rand::Rng;
 
@@ -145,7 +145,7 @@ pub struct EntityAabb {
     pub aabb: Aabb,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct CollisionInfo {
     pub target_id: EntityId,
     pub target_group: Group,
@@ -159,15 +159,18 @@ pub fn collision(w: &mut World, ctx: &CanvasRenderingContext2d) {
     //それを使ってグループごとのBVHを作成しworldに格納
     create_bvh(w);
 
-    let entitis_with_possible_contact: Rc<RefCell<Vec<(EntityId, EntityId)>>> =
+    let entities_with_possible_contact: Rc<RefCell<Vec<(EntityId, EntityId)>>> =
         Rc::new(RefCell::new(vec![]));
 
     //colliderコンポーネントへ衝突対象を書き込み
     let entities = collect_entities_from_archetype(&w, &[w.collider.id()]);
+
     for entity_id in entities.iter() {
         let position = w.transform.get_unchecked(entity_id).position;
+
         //暫定的に複数コライダーには非対応
-        let aabb = w.collider.get_unchecked(entity_id)[0].aabb(position);
+        let col = &mut w.collider.get_unchecked_mut(entity_id)[0];
+        let aabb = col.aabb(position);
 
         let entity_aabb = EntityAabb {
             entity_id: *entity_id,
@@ -182,7 +185,7 @@ pub fn collision(w: &mut World, ctx: &CanvasRenderingContext2d) {
             match node {
                 Some(n) => {
                     let entities_with_possible_contact_clone =
-                        entitis_with_possible_contact.clone();
+                        entities_with_possible_contact.clone();
                     let bvh_box = Box::new(n);
 
                     get_contact_with(&entity_aabb, &bvh_box, entities_with_possible_contact_clone);
@@ -192,16 +195,20 @@ pub fn collision(w: &mut World, ctx: &CanvasRenderingContext2d) {
                 None => w.vars.bvh[i] = None,
             }
         }
+
+        //colliderを拾ってきたタイミングで先にinfoを初期化しておく
+        col.target_infos.clear();
     }
 
     //狭域当たり判定　頑張れば上の方の処理とまとめてもうちょい参照の回数減らせそうだけど暫定的に冗長性持たせとく
-    for pair in entitis_with_possible_contact.borrow().iter() {
+    for pair in entities_with_possible_contact.borrow().iter() {
         let collision_info = narrow_collision_check(w, &pair.1, &pair.0);
+
         match collision_info {
             Ok(info) => w.collider.get_unchecked_mut(&pair.1)[0]
                 .target_infos
                 .push(info),
-            Err(_) => (),
+            Err(str) => (log(&str)),
         }
 
         w.collider.get_unchecked_mut(&pair.1)[0].add_target(&pair.0);
@@ -209,18 +216,74 @@ pub fn collision(w: &mut World, ctx: &CanvasRenderingContext2d) {
 
     for i in entities {
         let a = w.collider.get_unchecked_mut(&i);
+
         a[0].targets_submit();
     }
 
+    log(&format!("{:?}", entities_with_possible_contact.borrow()));
+
+    physics_collision_solve(w);
+
     //draw_bvh(w, ctx);
     //各々の当たり判定処理は別のsystemで行う
+}
+
+fn physics_collision_solve(w: &mut World) {
+    let entities = collect_entities_from_archetype(&w, &[w.collider.id()]);
+
+    for entity_id in entities.iter() {
+        let mut entity_colliders = w.collider.take_unchecked(entity_id);
+        let mut entity_transform = w.transform.take_unchecked(entity_id);
+        let targets = entity_colliders[0].targets_enter.clone();
+
+        for (index, target_id) in targets.iter().enumerate() {
+            // log(&format!(
+            //     "{:?}",
+            //     entity_colliders[0].target_infos[index].direction
+            // ));
+
+            if target_id <= entity_id {
+                continue;
+            }
+
+            let mut target_transform = w.transform.take_unchecked(target_id);
+
+            match entity_colliders[0].target_infos[index].direction {
+                Direction::North => {
+                    let temp = entity_transform.velocity.y;
+                    entity_transform.velocity.y = target_transform.velocity.y;
+                    target_transform.velocity.y = temp;
+                }
+                Direction::East => {
+                    let temp = entity_transform.velocity.x;
+                    entity_transform.velocity.x = target_transform.velocity.x;
+                    target_transform.velocity.x = temp;
+                }
+                Direction::South => {
+                    let temp = entity_transform.velocity.y;
+                    entity_transform.velocity.y = target_transform.velocity.y;
+                    target_transform.velocity.y = temp;
+                }
+                Direction::West => {
+                    let temp = entity_transform.velocity.x;
+                    entity_transform.velocity.x = target_transform.velocity.x;
+                    target_transform.velocity.x = temp;
+                }
+            }
+
+            w.transform.set(target_id, Some(target_transform));
+        }
+
+        w.collider.set(entity_id, Some(entity_colliders));
+        w.transform.set(entity_id, Some(entity_transform));
+    }
 }
 
 fn narrow_collision_check(
     w: &World,
     entity: &EntityId,
     target: &EntityId,
-) -> Result<CollisionInfo, &'static str> {
+) -> Result<CollisionInfo, String> {
     //暫定的に1つ目のコライダーだけを処理
     let entity_collider = w.collider.get_unchecked(&entity)[0].clone();
     let entity_transform = w.transform.get_unchecked(&entity).clone();
@@ -265,6 +328,28 @@ fn narrow_collision_check(
         diffs[Direction::West as usize] = diff_w;
     }
 
+    //仮組み　自分より相手のcolliderが小さい場合に、中に入り込んだときの処理
+    if entity_aabb.y_min < target_aabb.y_min && entity_aabb.y_max > target_aabb.y_max {
+        is_possible_axis.1 = true;
+
+        let diff_n = (target_aabb.y_max - entity_aabb.y_min) as i32;
+        diffs[Direction::North as usize] = diff_n;
+
+        let diff_s = (entity_aabb.y_max - target_aabb.y_min) as i32;
+        diffs[Direction::South as usize] = diff_s;
+    }
+
+    if entity_aabb.x_min < target_aabb.x_min && entity_aabb.x_max > target_aabb.x_max {
+        is_possible_axis.0 = true;
+
+        let diff_e = (entity_aabb.x_max - target_aabb.x_min) as i32;
+        diffs[Direction::East as usize] = diff_e;
+        let diff_w = (target_aabb.x_max - entity_aabb.x_min) as i32;
+        diffs[Direction::West as usize] = diff_w;
+    }
+
+    log(&format!("diffs:{:?}", diffs));
+
     //x軸とy軸両方が接触可能性がある場合接触
     if is_possible_axis.0 && is_possible_axis.1 {
         //diffsが一番小さい方向が接触している
@@ -308,7 +393,8 @@ fn narrow_collision_check(
         }
     }
 
-    Err("接触なし")
+    let message = format!("接触なし entity:{:?}, target:{:?}", entity, target);
+    Err(message)
 }
 
 fn draw_bvh(w: &mut World, ctx: &CanvasRenderingContext2d) {

@@ -18,7 +18,7 @@ pub fn tick(w: &mut World, ctx: &CanvasRenderingContext2d) {
     sys_collision::collision(w, ctx);
     sys_main::position_update(w);
     sys_player::player_move(w);
-    sys_player::player_attack(w);
+    //sys_player::player_attack(w);
 
     sys_weapon::time_increase(w);
     sys_weapon::fire(w);

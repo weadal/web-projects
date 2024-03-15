@@ -241,6 +241,7 @@ pub enum Group {
 impl Group {
     pub fn is_need_bvh(&self) -> bool {
         match self {
+            Group::Player => return true,
             Group::Enemy => return true,
             Group::Bullet => return true,
             Group::Building => return true,

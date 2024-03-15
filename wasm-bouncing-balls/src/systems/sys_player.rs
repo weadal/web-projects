@@ -78,7 +78,7 @@ pub fn create_player(w: &mut World) {
 pub fn player_move(w: &mut World) {
     let entities = collect_entities_from_group(w, &Group::Player);
     for entity_id in entities.iter() {
-        player_next_destination_set(w, entity_id);
+        let is_set_destination = player_next_destination_set(w, entity_id);
 
         if let Some(dest) = w.destination.get(entity_id) {
             if let Some(next_dest) = dest[0] {
@@ -89,8 +89,12 @@ pub fn player_move(w: &mut World) {
                     w.destination.set(entity_id, Some(vec![None]));
                     transform.velocity = Vector2::zero();
                 } else {
-                    let direction = (next_dest - transform.position).normalize();
-                    transform.velocity = direction * 100.0;
+                    if is_set_destination {
+                        let direction = (next_dest - transform.position).normalize();
+                        transform.velocity = direction * 100.0;
+                    }
+
+                    //この辺で当たり判定して到着処理？
                 }
                 w.transform.set(entity_id, Some(transform));
             }
@@ -98,9 +102,9 @@ pub fn player_move(w: &mut World) {
     }
 }
 
-fn player_next_destination_set(w: &mut World, entity_id: &EntityId) {
+fn player_next_destination_set(w: &mut World, entity_id: &EntityId) -> bool {
     if !w.vars.is_click_detection {
-        return;
+        return false;
     }
 
     let mut dest = w.destination.get_unchecked(entity_id).clone();
@@ -113,7 +117,7 @@ fn player_next_destination_set(w: &mut World, entity_id: &EntityId) {
                     next_dest = Some(click_point);
                 } else {
                     //次の目的地とクリック座標が同じ場合早期リターン
-                    return;
+                    return false;
                 }
             }
             None => next_dest = Some(click_point),
@@ -124,6 +128,7 @@ fn player_next_destination_set(w: &mut World, entity_id: &EntityId) {
         dest[0] = next_dest;
         w.destination.set(entity_id, Some(dest));
     }
+    true
 }
 
 pub fn player_targeting(w: &mut World) {
