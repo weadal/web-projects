@@ -120,7 +120,36 @@ pub fn position_update(w: &mut World) {
         w.transform.set(entity_id, Some(transform));
     }
 }
+pub fn player_reflection(w: &mut World) {
+    let entities = collect_entities_from_group(w, &Group::Player);
+    for entity_id in entities.iter() {
+        let mut transform = w.transform.get(entity_id).unwrap().clone();
 
+        let collider = w.collider.get_unchecked(entity_id)[0].clone();
+        let width = collider.shape.width;
+        let height = collider.shape.height;
+
+        if transform.position.x <= width {
+            transform.position.x = width;
+            transform.velocity.x = -transform.velocity.x;
+        }
+
+        if transform.position.x >= w.consts.canvas_width as f64 - width {
+            transform.position.x = w.consts.canvas_width as f64 - width;
+            transform.velocity.x = -transform.velocity.x;
+        }
+
+        if transform.position.y <= height {
+            transform.position.y = height;
+            transform.velocity.y = -transform.velocity.y;
+        }
+        if transform.position.y >= w.consts.canvas_height as f64 - height {
+            transform.position.y = w.consts.canvas_height as f64 - height;
+            transform.velocity.y = -transform.velocity.y;
+        }
+        w.transform.set(entity_id, Some(transform));
+    }
+}
 pub fn ball_reflection(w: &mut World) {
     let entities = collect_entities_from_group(w, &Group::Enemy);
     for entity_id in entities.iter() {

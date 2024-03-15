@@ -205,13 +205,14 @@ pub fn collision(w: &mut World, ctx: &CanvasRenderingContext2d) {
         let collision_info = narrow_collision_check(w, &pair.1, &pair.0);
 
         match collision_info {
-            Ok(info) => w.collider.get_unchecked_mut(&pair.1)[0]
-                .target_infos
-                .push(info),
+            Ok(info) => {
+                w.collider.get_unchecked_mut(&pair.1)[0]
+                    .target_infos
+                    .push(info);
+                w.collider.get_unchecked_mut(&pair.1)[0].add_target(&pair.0);
+            }
             Err(str) => (log(&str)),
         }
-
-        w.collider.get_unchecked_mut(&pair.1)[0].add_target(&pair.0);
     }
 
     for i in entities {
@@ -245,6 +246,11 @@ fn physics_collision_solve(w: &mut World) {
             if target_id <= entity_id {
                 continue;
             }
+
+            log(&format!(
+                "check:{:?},{:?} index:{:?}",
+                entity_id, target_id, index
+            ));
 
             let mut target_transform = w.transform.take_unchecked(target_id);
 
@@ -393,7 +399,10 @@ fn narrow_collision_check(
         }
     }
 
-    let message = format!("接触なし entity:{:?}, target:{:?}", entity, target);
+    let message = format!(
+        "接触なし entity:{:?}({:?}), target:{:?}({:?})",
+        entity, entity_collider.group, target, target_collider.group
+    );
     Err(message)
 }
 
