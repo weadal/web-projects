@@ -49,6 +49,14 @@ impl Collider {
             y_min: pos.y - (self.shape.height / 2.0),
         }
     }
+    pub fn local_aabb(&self) -> Aabb {
+        Aabb {
+            x_max: self.shape.width / 2.0,
+            x_min: self.shape.width / 2.0,
+            y_max: self.shape.height / 2.0,
+            y_min: self.shape.height / 2.0,
+        }
+    }
 
     pub fn add_target(&mut self, target: &EntityId) {
         self.targets_temp.push(target.clone());
@@ -211,7 +219,7 @@ pub fn collision(w: &mut World, ctx: &CanvasRenderingContext2d) {
                     .push(info);
                 w.collider.get_unchecked_mut(&pair.1)[0].add_target(&pair.0);
             }
-            Err(str) => (log(&str)),
+            Err(str) => (),
         }
     }
 
@@ -221,7 +229,7 @@ pub fn collision(w: &mut World, ctx: &CanvasRenderingContext2d) {
         a[0].targets_submit();
     }
 
-    log(&format!("{:?}", entities_with_possible_contact.borrow()));
+    //log(&format!("{:?}", entities_with_possible_contact.borrow()));
 
     physics_collision_solve(w);
 
@@ -246,11 +254,6 @@ fn physics_collision_solve(w: &mut World) {
             if target_id <= entity_id {
                 continue;
             }
-
-            log(&format!(
-                "check:{:?},{:?} index:{:?}",
-                entity_id, target_id, index
-            ));
 
             let mut target_transform = w.transform.take_unchecked(target_id);
 
@@ -291,10 +294,10 @@ fn narrow_collision_check(
     target: &EntityId,
 ) -> Result<CollisionInfo, String> {
     //暫定的に1つ目のコライダーだけを処理
-    let entity_collider = w.collider.get_unchecked(&entity)[0].clone();
-    let entity_transform = w.transform.get_unchecked(&entity).clone();
+    let entity_collider = w.collider.get(&entity).unwrap()[0].clone();
+    let entity_transform = w.transform.get(&entity).unwrap().clone();
     let entity_aabb = entity_collider.aabb(entity_transform.position);
-    let target_collider = w.collider.get_unchecked(&target)[0].clone();
+    let target_collider = w.collider.get(&target).unwrap()[0].clone();
     let target_transform = w.transform.get_unchecked(&target).clone();
     let target_aabb = target_collider.aabb(target_transform.position);
 
@@ -354,7 +357,7 @@ fn narrow_collision_check(
         diffs[Direction::West as usize] = diff_w;
     }
 
-    log(&format!("diffs:{:?}", diffs));
+    //log(&format!("diffs:{:?}", diffs));
 
     //x軸とy軸両方が接触可能性がある場合接触
     if is_possible_axis.0 && is_possible_axis.1 {
@@ -481,6 +484,7 @@ fn create_bvh(w: &mut World) {
         let entities = collect_entities_from_group(w, &group);
 
         if entities.len() == 0 {
+            w.vars.bvh[i] = None;
             continue;
         }
         let mut entity_aabbs: Vec<EntityAabb> = vec![];
@@ -704,18 +708,16 @@ mod tests {
         println!("left{:?}", collider.targets_left);
     }
 
-    fn test_collision(w: &mut World) {
+    pub fn test_collision(w: &mut World) {
         //グループごとにvec<collisionTemp>を作成
         //それを使ってグループごとのBVHを作成しworldに格納
         create_bvh(w);
 
-        let entitis_with_possible_contact: Rc<RefCell<Vec<(EntityId, EntityId)>>> =
+        let entities_with_possible_contact: Rc<RefCell<Vec<(EntityId, EntityId)>>> =
             Rc::new(RefCell::new(vec![]));
 
         //colliderコンポーネントへ衝突対象を書き込み
         let entities = collect_entities_from_archetype(&w, &[w.collider.id()]);
-
-        // println!("{:?}", entities);
 
         for entity_id in entities.iter() {
             let position = w.transform.get_unchecked(entity_id).position;
@@ -737,7 +739,7 @@ mod tests {
                 match node {
                     Some(n) => {
                         let entities_with_possible_contact_clone =
-                            entitis_with_possible_contact.clone();
+                            entities_with_possible_contact.clone();
                         let bvh_box = Box::new(n);
 
                         get_contact_with(
@@ -756,76 +758,34 @@ mod tests {
             col.target_infos.clear();
         }
 
-        //println!("{:?}", entitis_with_possible_contact.borrow());
-
         //狭域当たり判定　頑張れば上の方の処理とまとめてもうちょい参照の回数減らせそうだけど暫定的に冗長性持たせとく
-        for pair in entitis_with_possible_contact.borrow().iter() {
+        for pair in entities_with_possible_contact.borrow().iter() {
             let collision_info = narrow_collision_check(w, &pair.1, &pair.0);
 
-            // println!(
-            //     "info_id:{:?}",
-            //     collision_info.clone().ok().unwrap().target_id
-            // );
             match collision_info {
-                Ok(info) => w.collider.get_unchecked_mut(&pair.1)[0]
-                    .target_infos
-                    .push(info),
-                Err(_) => (),
+                Ok(info) => {
+                    w.collider.get_unchecked_mut(&pair.1)[0]
+                        .target_infos
+                        .push(info);
+                    w.collider.get_unchecked_mut(&pair.1)[0].add_target(&pair.0);
+                }
+                Err(str) => (),
             }
-
-            w.collider.get_unchecked_mut(&pair.1)[0].add_target(&pair.0);
-
-            // println!(
-            //     "{:?}に{:?}を追加 現在のtemp:{:?}",
-            //     &pair.1,
-            //     &pair.0,
-            //     w.collider.get_unchecked(&pair.1)[0].targets_temp
-            // );
-
-            let mut infos: Vec<EntityId> = vec![];
-            let mut info_details: Vec<CollisionInfo> = vec![];
-
-            for i in w.collider.get_unchecked_mut(&pair.1)[0]
-                .target_infos
-                .clone()
-            {
-                infos.push(i.target_id);
-                info_details.push(i);
-            }
-            // println!("{:?}のcollision_info{:?}", pair.1, infos);
         }
 
         for i in entities {
             let a = w.collider.get_unchecked_mut(&i);
 
-            // println!(
-            //     "{:?} temp{:?} enter{:?},stay{:?},left{:?}",
-            //     i, a[0].targets_temp, a[0].targets_enter, a[0].targets, a[0].targets_left
-            // );
-
             a[0].targets_submit();
-
-            let mut infos: Vec<EntityId> = vec![];
-            let mut info_details: Vec<CollisionInfo> = vec![];
-            let directions: Vec<Direction> = vec![];
-
-            for info in a[0].target_infos.clone() {
-                println!(
-                    "{:?}が{:?}に接触 方向:{:?} 最近接点:{:?}",
-                    i, info.target_id, info.direction, info.point
-                );
-                infos.push(info.target_id);
-                info_details.push(info);
-            }
-            //println!("{:?}のcollision_info{:?}", i, info_details);
-
-            // println!(
-            //     "{:?} temp{:?} enter{:?},stay{:?},left{:?}",
-            //     i, a[0].targets_temp, a[0].targets_enter, a[0].targets, a[0].targets_left
-            // );
-
-            // println!("");
         }
+
+        //log(&format!("{:?}", entities_with_possible_contact.borrow()));
+        println!("{:?}", entities_with_possible_contact.borrow());
+
+        physics_collision_solve(w);
+
+        //draw_bvh(w, ctx);
+        //各々の当たり判定処理は別のsystemで行う
     }
 
     pub fn test_create_ball_random(w: &mut World) {
@@ -898,6 +858,88 @@ mod tests {
 
         w.group.register(entity, Group::Enemy);
         w.clock.register(entity, Clock::new());
+        pub fn test_create_static_ball_pos(w: &mut World, pos: &Vector2) {
+            let id = w.entities.instantiate_entity();
+            let entity = w.entities.get_mut(&id).unwrap();
+
+            let pos = Vector2 {
+                x: pos.x as f64,
+                y: pos.y as f64,
+            };
+
+            let transform = Transform {
+                id,
+                position: pos,
+                scale: 1.0,
+                velocity: Vector2::zero(),
+                parent: None,
+                children: None,
+            };
+
+            w.transform.register(entity, transform);
+
+            let rect = Rect::new(BALL_SIZE, BALL_SIZE);
+            let collider = Collider::new(rect, Group::Enemy, Vector2::zero());
+            w.collider.register(entity, vec![collider]);
+
+            w.group.register(entity, Group::Enemy);
+            w.clock.register(entity, Clock::new());
+        }
+    }
+
+    pub fn test_create_static_bullet_pos(w: &mut World, pos: &Vector2) {
+        let id = w.entities.instantiate_entity();
+        let entity = w.entities.get_mut(&id).unwrap();
+
+        let pos = Vector2 {
+            x: pos.x as f64,
+            y: pos.y as f64,
+        };
+
+        let transform = Transform {
+            id,
+            position: pos,
+            scale: 1.0,
+            velocity: Vector2::zero(),
+            parent: None,
+            children: None,
+        };
+
+        w.transform.register(entity, transform);
+
+        let rect = Rect::new(BALL_SIZE, BALL_SIZE);
+        let collider = Collider::new(rect, Group::Bullet, Vector2::zero());
+        w.collider.register(entity, vec![collider]);
+
+        w.group.register(entity, Group::Bullet);
+        w.clock.register(entity, Clock::new());
+        pub fn test_create_static_ball_pos(w: &mut World, pos: &Vector2) {
+            let id = w.entities.instantiate_entity();
+            let entity = w.entities.get_mut(&id).unwrap();
+
+            let pos = Vector2 {
+                x: pos.x as f64,
+                y: pos.y as f64,
+            };
+
+            let transform = Transform {
+                id,
+                position: pos,
+                scale: 1.0,
+                velocity: Vector2::zero(),
+                parent: None,
+                children: None,
+            };
+
+            w.transform.register(entity, transform);
+
+            let rect = Rect::new(BALL_SIZE, BALL_SIZE);
+            let collider = Collider::new(rect, Group::Enemy, Vector2::zero());
+            w.collider.register(entity, vec![collider]);
+
+            w.group.register(entity, Group::Enemy);
+            w.clock.register(entity, Clock::new());
+        }
     }
     #[test]
     fn world_collision_test() {
@@ -908,41 +950,46 @@ mod tests {
         // for _ in 0..10 {
         //     test_create_ball_random(&mut w);
         // }
-        let v1 = Vector2 { x: 81.0, y: 80.0 };
-        let v2 = Vector2 { x: 100.0, y: 100.0 };
+        let v1 = Vector2 { x: -10.0, y: -10.0 };
+        let v2 = Vector2 { x: 10.0, y: 10.0 };
 
-        test_create_static_ball_pos(&mut w, &v1);
+        test_create_static_bullet_pos(&mut w, &v1);
         test_create_static_ball_pos(&mut w, &v2);
 
         println!("Frame:1");
         test_collision(&mut w);
         println!("================================");
 
-        let entities = collect_entities_from_archetype(&w, &[w.collider.id()]);
-        for entity in entities {
-            let c = w.collider.get_unchecked(&entity)[0].clone();
-            // println!("{:?}のtemp:{:?}", entity, c.targets_temp);
-        }
+        test_remove_out_of_bounds(&mut w);
 
-        let entities = collect_entities_from_archetype(&w, &[w.transform.id()]);
-        for entity in entities {
-            //position初期化
-            let mut rng = rand::thread_rng();
-            let mut rand_x =
-                rng.gen_range(BALL_SIZE * 2.0..w.consts.canvas_width as f64 - BALL_SIZE * 2.0);
-            let mut rand_y =
-                rng.gen_range(BALL_SIZE * 2.0..w.consts.canvas_height as f64 - BALL_SIZE * 2.0);
-
-            let pos = Vector2 {
-                x: rand_x as f64,
-                y: rand_y as f64,
-            };
-
-            w.transform.get_unchecked_mut(&entity).position = pos
-        }
+        let v2 = Vector2 { x: -5.0, y: -5.0 };
+        w.transform.get_unchecked_mut(&EntityId(1)).position = v2;
 
         println!("================================");
         println!("Frame:2");
         test_collision(&mut w);
+    }
+
+    pub fn test_remove_out_of_bounds(w: &mut World) {
+        println!("canvas_width:{:?}", w.consts.canvas_width as f64);
+
+        //暫定的にコライダー持ちをすべて処理(将来的にコライダーを持ったフィールド外のオブジェクトが欲しくなるかも)
+        let entities = collect_entities_from_archetype(&w, &[w.collider.id()]);
+        for entity_id in entities.iter() {
+            //ボールがコートの外に出たときに消滅させる
+            let pos = w.transform.get(entity_id).unwrap().position;
+            let aabb = w.collider.get(entity_id).unwrap()[0].local_aabb();
+            println!("{:?},aabb{:?}", entity_id, aabb);
+
+            //とりあえず描画のAABBが画面外に出たら破棄する(コライダーのAABBは描画のAABBより小さいものとする)
+            if pos.x > w.consts.canvas_width as f64 + aabb.x_max
+                || pos.x < aabb.x_min
+                || pos.y > w.consts.canvas_height as f64 + aabb.y_max
+                || pos.y < aabb.y_min
+            {
+                w.remove_entity(entity_id);
+                println!("領域外に落ちたentity(id:{:?})を破棄", entity_id);
+            }
+        }
     }
 }
