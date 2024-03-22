@@ -1,8 +1,8 @@
 use rand::Rng;
 
 use crate::{
-    structs::ecs::*,
-    structs::{structs_util::*, weapon::BulletParamater},
+    log,
+    structs::{ecs::*, structs_util::*, weapon::BulletParamater},
     user_consts::*,
     utils::*,
 };
@@ -96,6 +96,8 @@ pub fn create_building(w: &mut World, position: &Vector2) {
     w.clock.register(entity, Clock::new());
 }
 pub fn update_timer(w: &mut World) {
+    w.vars.ingame_time += w.consts.delta_time;
+
     let entities = collect_entities_from_archetype(&w, &[w.clock.id()]);
 
     for entity_id in entities.iter() {
@@ -281,11 +283,20 @@ pub fn remove_out_of_bounds(w: &mut World) {
 // }
 
 pub fn check_gameover(w: &mut World) {
+    //制限時間になったらゲームオーバー
+    if w.vars.ingame_time > 10000.0 {
+        log(&format!("制限時間"));
+
+        w.vars.state = GameState::GameOver;
+    }
+
     //暫定的に全エンティティがいなくなったらゲームオーバー
     let alive_entities = w.entities.get_alive_entities();
     if let None = alive_entities {
         w.vars.state = GameState::GameOver;
     }
+
+    log("Game Over! Click or Tap to Title");
 }
 
 pub fn collect_entities_from_archetype(w: &World, values: &[ComponentId]) -> Vec<EntityId> {

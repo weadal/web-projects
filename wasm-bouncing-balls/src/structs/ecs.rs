@@ -415,6 +415,7 @@ pub struct WorldVariables {
     pub is_click_detection: bool,
     pub is_stop: bool,
     pub state: GameState,
+    pub ingame_time: f64,
     pub bvh: Vec<Option<BvhNode>>,
 }
 
@@ -426,6 +427,7 @@ impl WorldVariables {
             is_click_detection: false,
             is_stop: false,
             state: GameState::Title,
+            ingame_time: 0.0,
             bvh: vec![None; Group::None as usize],
         }
     }

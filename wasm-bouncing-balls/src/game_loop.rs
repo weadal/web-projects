@@ -1,4 +1,5 @@
 use crate::{
+    log,
     structs::ecs::*,
     systems::{sys_draw, *},
 };
@@ -26,7 +27,9 @@ pub fn tick(w: &mut World, ctx: &CanvasRenderingContext2d) {
     sys_main::ball_reflection(w);
     sys_main::player_reflection(w);
     sys_main::remove_out_of_bounds(w);
-    sys_main::check_gameover(w);
 
     sys_main::update_timer(w);
+    log(&format!("time:{:?}", w.vars.ingame_time));
+
+    sys_main::check_gameover(w);
 }

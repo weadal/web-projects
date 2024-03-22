@@ -240,8 +240,6 @@ fn update_title(world: &mut World, input: &Rc<RefCell<Input>>, ctx: &CanvasRende
 fn update_gameover(world: &mut World, input: &Rc<RefCell<Input>>, ctx: &CanvasRenderingContext2d) {
     let mut input = input.borrow_mut();
 
-    log("Game Over! Click or Tap to Title");
-
     if input.click_point != None {
         log("Return to Title...");
         input.clear_click_point();
