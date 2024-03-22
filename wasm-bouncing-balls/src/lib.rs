@@ -15,6 +15,7 @@ use html_cast::*;
 use js_sys::Math;
 use structs::{
     ecs::{EntityId, World},
+    metagames::{self, GameManager},
     structs_util::{GameState, Vector2},
 };
 use systems::{sys_collision::EntityAabb, *};
@@ -172,14 +173,14 @@ fn main_loop(input: Rc<RefCell<Input>>) {
 
     let mut fps = Fps::new();
 
-    let mut world = World::new();
+    let mut game_manager = metagames::GameManager::new();
 
     let input_rc_clone = input.clone();
     *closure_clone.borrow_mut() = Some(Closure::new(move || {
-        update(&mut world, &input_rc_clone);
+        update(&mut game_manager, &input_rc_clone);
         fps.render();
 
-        world.consts.delta_time = fps.delta_time;
+        game_manager.world.consts.delta_time = fps.delta_time;
 
         if input_rc_clone.borrow().is_mouse_down {
             input_rc_clone.borrow_mut().mouse_down_time += fps.delta_time;
@@ -191,7 +192,7 @@ fn main_loop(input: Rc<RefCell<Input>>) {
     request_animation_frame(&closure_clone);
 }
 
-fn update(world: &mut World, input: &Rc<RefCell<Input>>) {
+fn update(manager: &mut GameManager, input: &Rc<RefCell<Input>>) {
     if input.borrow().is_playing {
         let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
         let ctx = canvas
@@ -201,17 +202,21 @@ fn update(world: &mut World, input: &Rc<RefCell<Input>>) {
             .dyn_into::<CanvasRenderingContext2d>()
             .unwrap();
 
-        match world.vars.state {
-            GameState::Title => update_title(world, input, &ctx),
-            GameState::Main => update_main(world, input, &ctx),
-            GameState::GameOver => update_gameover(world, input, &ctx),
+        match manager.state {
+            GameState::Title => update_title(manager, input, &ctx),
+            GameState::Main => update_main(manager, input, &ctx),
+            GameState::GameOver => update_gameover(manager, input, &ctx),
             _ => (),
         }
     }
-    input_postprocess(world, input);
+    input_postprocess(&mut manager.world, input);
 }
 
-fn update_title(world: &mut World, input: &Rc<RefCell<Input>>, ctx: &CanvasRenderingContext2d) {
+fn update_title(
+    manager: &mut GameManager,
+    input: &Rc<RefCell<Input>>,
+    ctx: &CanvasRenderingContext2d,
+) {
     let canvas = query_selector_to::<HtmlCanvasElement>("canvas").unwrap();
 
     ctx.set_fill_style(&js_color_rgba(0.0, 0.0, 0.0, 1.0));
@@ -223,57 +228,72 @@ fn update_title(world: &mut World, input: &Rc<RefCell<Input>>, ctx: &CanvasRende
     if input.click_point != None {
         input.clear_click_point();
 
-        world.consts.canvas_width = canvas.width();
-        world.consts.canvas_height = canvas.height();
+        manager.world.consts.canvas_width = canvas.width();
+        manager.world.consts.canvas_height = canvas.height();
 
         for _ in 0..25 {
-            sys_main::create_ball(world);
+            sys_main::create_ball(&mut manager.world);
         }
 
-        sys_player::create_player(world);
+        sys_player::create_player(&mut manager.world);
 
         log("Game Start!");
-        world.vars.state = GameState::Main;
+        manager.state = GameState::Main;
     }
 }
 
-fn update_gameover(world: &mut World, input: &Rc<RefCell<Input>>, ctx: &CanvasRenderingContext2d) {
+fn update_gameover(
+    manager: &mut GameManager,
+    input: &Rc<RefCell<Input>>,
+    ctx: &CanvasRenderingContext2d,
+) {
     let mut input = input.borrow_mut();
 
     if input.click_point != None {
         log("Return to Title...");
         input.clear_click_point();
-        world.vars.state = GameState::Title;
+
+        manager.world = World::new();
+        manager.state = GameState::Title;
     }
 }
 
-fn update_main(world: &mut World, input: &Rc<RefCell<Input>>, ctx: &CanvasRenderingContext2d) {
+fn update_main(
+    manager: &mut GameManager,
+    input: &Rc<RefCell<Input>>,
+    ctx: &CanvasRenderingContext2d,
+) {
     ctx.set_fill_style(&js_color_rgba(0.0, 0.0, 0.0, 1.0));
     ctx.fill_rect(
         0.0,
         0.0,
-        world.consts.canvas_width as f64,
-        world.consts.canvas_height as f64,
+        manager.world.consts.canvas_width as f64,
+        manager.world.consts.canvas_height as f64,
     );
 
-    input_to_world(world, input);
-    game_loop::tick(world, ctx);
+    input_to_game(manager, input);
+    game_loop::tick(&mut manager.world, ctx);
+
+    if manager.world.vars.is_gameover {
+        manager.state = GameState::GameOver;
+        log("Game Over! Click or Tap to Title");
+    }
 }
 
-fn input_to_world(world: &mut World, input: &Rc<RefCell<Input>>) {
-    if world.vars.last_click_point != input.borrow().click_point {
-        world.vars.is_click_detection = true;
+fn input_to_game(manager: &mut GameManager, input: &Rc<RefCell<Input>>) {
+    if manager.world.vars.last_click_point != input.borrow().click_point {
+        manager.world.vars.is_click_detection = true;
 
-        if world.vars.is_stop == true {
-            sys_main::create_building(world, &input.borrow().click_point.unwrap());
-            world.vars.is_stop = false;
+        if manager.world.vars.is_stop == true {
+            sys_main::create_building(&mut manager.world, &input.borrow().click_point.unwrap());
+            manager.world.vars.is_stop = false;
         }
 
-        world.vars.last_click_point = input.borrow().click_point;
+        manager.world.vars.last_click_point = input.borrow().click_point;
     }
 
     if input.borrow().mouse_down_time > 200.0 {
-        world.vars.is_stop = true;
+        manager.world.vars.is_stop = true;
     }
 }
 

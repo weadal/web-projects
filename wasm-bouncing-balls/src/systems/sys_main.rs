@@ -287,16 +287,14 @@ pub fn check_gameover(w: &mut World) {
     if w.vars.ingame_time > 10000.0 {
         log(&format!("制限時間"));
 
-        w.vars.state = GameState::GameOver;
+        w.vars.is_gameover = true;
     }
 
     //暫定的に全エンティティがいなくなったらゲームオーバー
     let alive_entities = w.entities.get_alive_entities();
     if let None = alive_entities {
-        w.vars.state = GameState::GameOver;
+        w.vars.is_gameover = true;
     }
-
-    log("Game Over! Click or Tap to Title");
 }
 
 pub fn collect_entities_from_archetype(w: &World, values: &[ComponentId]) -> Vec<EntityId> {
