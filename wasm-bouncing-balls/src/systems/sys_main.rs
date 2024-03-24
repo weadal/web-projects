@@ -115,6 +115,7 @@ pub fn position_update(w: &mut World) {
 
     for entity_id in entities.iter() {
         let mut transform = w.transform.get(entity_id).unwrap().clone();
+
         let vel = transform.velocity;
 
         transform.position.x += vel.x * w.consts.delta_time / 1000.0;
@@ -123,6 +124,11 @@ pub fn position_update(w: &mut World) {
     }
 }
 pub fn player_reflection(w: &mut World) {
+    let screen_left = w.vars.camera_position.x;
+    let screen_right = w.consts.canvas_width as f64 + w.vars.camera_position.x;
+    let screen_top = w.vars.camera_position.y;
+    let screen_bottom = w.consts.canvas_height as f64 + w.vars.camera_position.y;
+
     let entities = collect_entities_from_group(w, &Group::Player);
     for entity_id in entities.iter() {
         let mut transform = w.transform.get(entity_id).unwrap().clone();
@@ -131,28 +137,35 @@ pub fn player_reflection(w: &mut World) {
         let width = collider.shape.width;
         let height = collider.shape.height;
 
-        if transform.position.x <= width {
-            transform.position.x = width;
+        //左端
+        if transform.position.x <= screen_left + width {
+            transform.position.x = screen_left + width;
             transform.velocity.x = -transform.velocity.x;
         }
-
-        if transform.position.x >= w.consts.canvas_width as f64 - width {
-            transform.position.x = w.consts.canvas_width as f64 - width;
+        //右端
+        if transform.position.x >= screen_right - width {
+            transform.position.x = screen_right - width;
             transform.velocity.x = -transform.velocity.x;
         }
-
-        if transform.position.y <= height {
-            transform.position.y = height;
+        //上端
+        if transform.position.y <= screen_top + height {
+            transform.position.y = screen_top + height;
             transform.velocity.y = -transform.velocity.y;
         }
-        if transform.position.y >= w.consts.canvas_height as f64 - height {
-            transform.position.y = w.consts.canvas_height as f64 - height;
+        //下端
+        if transform.position.y >= screen_bottom - height {
+            transform.position.y = screen_bottom - height;
             transform.velocity.y = -transform.velocity.y;
         }
         w.transform.set(entity_id, Some(transform));
     }
 }
 pub fn ball_reflection(w: &mut World) {
+    let screen_left = w.vars.camera_position.x;
+    let screen_right = w.consts.canvas_width as f64 + w.vars.camera_position.x;
+    let screen_top = w.vars.camera_position.y;
+    let screen_bottom = w.consts.canvas_height as f64 + w.vars.camera_position.y;
+
     let entities = collect_entities_from_group(w, &Group::Enemy);
     for entity_id in entities.iter() {
         let mut transform = w.transform.get(entity_id).unwrap().clone();
@@ -161,22 +174,24 @@ pub fn ball_reflection(w: &mut World) {
         let width = collider.shape.width;
         let height = collider.shape.height;
 
-        if transform.position.x <= width {
-            transform.position.x = width;
+        //左端
+        if transform.position.x <= screen_left + width {
+            transform.position.x = screen_left + width;
             transform.velocity.x = -transform.velocity.x;
         }
-
-        if transform.position.x >= w.consts.canvas_width as f64 - width {
-            transform.position.x = w.consts.canvas_width as f64 - width;
+        //右端
+        if transform.position.x >= screen_right - width {
+            transform.position.x = screen_right - width;
             transform.velocity.x = -transform.velocity.x;
         }
-
-        if transform.position.y <= height {
-            transform.position.y = height;
+        //上端
+        if transform.position.y <= screen_top + height {
+            transform.position.y = screen_top + height;
             transform.velocity.y = -transform.velocity.y;
         }
-        if transform.position.y >= w.consts.canvas_height as f64 - height {
-            transform.position.y = w.consts.canvas_height as f64 - height;
+        //下端
+        if transform.position.y >= screen_bottom - height {
+            transform.position.y = screen_bottom - height;
             transform.velocity.y = -transform.velocity.y;
         }
         w.transform.set(entity_id, Some(transform));
@@ -233,6 +248,11 @@ pub fn ball_move(w: &mut World) {
 // }
 
 pub fn remove_out_of_bounds(w: &mut World) {
+    let screen_left = w.vars.camera_position.x;
+    let screen_right = w.consts.canvas_width as f64 + w.vars.camera_position.x;
+    let screen_top = w.vars.camera_position.y;
+    let screen_bottom = w.consts.canvas_height as f64 + w.vars.camera_position.y;
+
     //暫定的にコライダー持ちをすべて処理(将来的にコライダーを持ったフィールド外のオブジェクトが欲しくなるかも)
     let entities = collect_entities_from_archetype(&w, &[w.collider.id()]);
     for entity_id in entities.iter() {
@@ -241,13 +261,13 @@ pub fn remove_out_of_bounds(w: &mut World) {
         let aabb = w.draw_param.get(entity_id).unwrap().shape.local_aabb();
 
         //とりあえず描画のAABBが画面外に出たら破棄する(コライダーのAABBは描画のAABBより小さいものとする)
-        if pos.x > w.consts.canvas_width as f64 + aabb.x_max
-            || pos.x < aabb.x_min
-            || pos.y > w.consts.canvas_height as f64 + aabb.y_max
-            || pos.y < aabb.y_min
+        if pos.x > screen_right + aabb.x_max
+            || pos.x < screen_left + aabb.x_min
+            || pos.y > screen_bottom + aabb.y_max
+            || pos.y < screen_top + aabb.y_min
         {
             w.remove_entity(entity_id);
-            crate::log(&format!("領域外に落ちたentity(id:{:?})を破棄", entity_id))
+            //crate::log(&format!("領域外に落ちたentity(id:{:?})を破棄", entity_id))
         }
     }
 }
@@ -283,12 +303,12 @@ pub fn remove_out_of_bounds(w: &mut World) {
 // }
 
 pub fn check_gameover(w: &mut World) {
-    //制限時間になったらゲームオーバー
-    if w.vars.ingame_time > 10000.0 {
-        log(&format!("制限時間"));
+    //制限時間になったらゲームオーバー デバッグ用に一時コメントアウト
+    // if w.vars.ingame_time > 10000.0 {
+    //     log(&format!("制限時間"));
 
-        w.vars.is_gameover = true;
-    }
+    //     w.vars.is_gameover = true;
+    // }
 
     //暫定的に全エンティティがいなくなったらゲームオーバー
     let alive_entities = w.entities.get_alive_entities();

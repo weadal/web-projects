@@ -416,6 +416,7 @@ pub struct WorldVariables {
     pub is_stop: bool,
     pub is_gameover: bool,
     pub ingame_time: f64,
+    pub camera_position: Vector2,
     pub bvh: Vec<Option<BvhNode>>,
 }
 
@@ -428,6 +429,7 @@ impl WorldVariables {
             is_stop: false,
             is_gameover: false,
             ingame_time: 0.0,
+            camera_position: Vector2 { x: 0.0, y: 0.0 },
             bvh: vec![None; Group::None as usize],
         }
     }

@@ -263,7 +263,7 @@ fn update_main(
     input: &Rc<RefCell<Input>>,
     ctx: &CanvasRenderingContext2d,
 ) {
-    ctx.set_fill_style(&js_color_rgba(0.0, 0.0, 0.0, 1.0));
+    ctx.set_fill_style(&js_color_rgba(50.0, 30.0, 10.0, 1.0));
     ctx.fill_rect(
         0.0,
         0.0,
@@ -271,7 +271,7 @@ fn update_main(
         manager.world.consts.canvas_height as f64,
     );
 
-    input_to_game(manager, input);
+    input_to_manager(manager, input);
     game_loop::tick(&mut manager.world, ctx);
 
     if manager.world.vars.is_gameover {
@@ -280,12 +280,17 @@ fn update_main(
     }
 }
 
-fn input_to_game(manager: &mut GameManager, input: &Rc<RefCell<Input>>) {
+fn input_to_manager(manager: &mut GameManager, input: &Rc<RefCell<Input>>) {
     if manager.world.vars.last_click_point != input.borrow().click_point {
         manager.world.vars.is_click_detection = true;
 
+        let ingame_click_point =
+            input.borrow().click_point.unwrap() + manager.world.vars.camera_position;
+
         if manager.world.vars.is_stop == true {
-            sys_main::create_building(&mut manager.world, &input.borrow().click_point.unwrap());
+            let pos = input.borrow().click_point.unwrap() + manager.world.vars.camera_position;
+
+            sys_main::create_building(&mut manager.world, &pos);
             manager.world.vars.is_stop = false;
         }
 

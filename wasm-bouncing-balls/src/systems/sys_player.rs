@@ -80,10 +80,11 @@ pub fn player_move(w: &mut World) {
     for entity_id in entities.iter() {
         let is_set_destination = player_next_destination_set(w, entity_id);
 
+        let mut transform = w.transform.get_unchecked(entity_id).clone();
+        let mut position = transform.position;
+
         if let Some(dest) = w.destination.get(entity_id) {
             if let Some(next_dest) = dest[0] {
-                let mut transform = w.transform.get_unchecked(entity_id).clone();
-
                 //到着処理
                 if transform.position.distance(&next_dest) <= 2.0 {
                     w.destination.set(entity_id, Some(vec![None]));
@@ -99,6 +100,11 @@ pub fn player_move(w: &mut World) {
                 w.transform.set(entity_id, Some(transform));
             }
         }
+
+        log(&format!("position:{:?}", position));
+        position.x = position.x - w.consts.canvas_width as f64 / 2.0;
+        position.y = position.y - w.consts.canvas_height as f64 / 2.0;
+        w.vars.camera_position = position;
     }
 }
 
@@ -189,7 +195,7 @@ pub fn draw_player_range(w: &mut World, ctx: &CanvasRenderingContext2d) {
     for entity_id in entities.iter() {
         let pos = w.transform.get_unchecked(entity_id).position;
         let aabb = w.collider.get_unchecked(entity_id)[p_collider::MAX_RANGE].aabb(pos);
-        draw_aabb(ctx, &aabb);
+        sys_draw::draw_aabb(ctx, &aabb, w.vars.camera_position);
     }
 }
 

@@ -433,7 +433,7 @@ fn draw_bvh(w: &mut World, ctx: &CanvasRenderingContext2d) {
                 }
 
                 let node_box = Box::new(n);
-                draw_bvh_inner(&ctx, &node_box);
+                draw_bvh_inner(&ctx, &node_box, w.vars.camera_position);
                 w.vars.bvh[i] = Some(*node_box);
             }
             None => w.vars.bvh[i] = None,
@@ -462,14 +462,14 @@ fn draw_bvh(w: &mut World, ctx: &CanvasRenderingContext2d) {
     //     w.vars.bvh[Group::Bullet as usize] = Some(*node_box);
     // }
 }
-fn draw_bvh_inner<'a>(ctx: &'a CanvasRenderingContext2d, node: &Box<BvhNode>) {
-    draw_aabb(ctx, &node.aabb);
+fn draw_bvh_inner<'a>(ctx: &'a CanvasRenderingContext2d, node: &Box<BvhNode>, camera_pos: Vector2) {
+    sys_draw::draw_aabb(ctx, &node.aabb, camera_pos);
 
     //リーフノードでない場合、再帰的にツリーを降下する
     if node.entitiy_aabbs.len() > 1 {
-        draw_bvh_inner(ctx, node.left_child.as_ref().unwrap());
+        draw_bvh_inner(ctx, node.left_child.as_ref().unwrap(), camera_pos);
 
-        draw_bvh_inner(ctx, node.right_child.as_ref().unwrap());
+        draw_bvh_inner(ctx, node.right_child.as_ref().unwrap(), camera_pos);
     }
 }
 

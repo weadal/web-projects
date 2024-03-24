@@ -14,12 +14,15 @@ use std::vec;
 use super::ecs::World;
 
 pub struct GameManager {
+    pub last_screen_click_point: Option<Vector2>,
+
     pub world: World,
     pub state: GameState,
 }
 impl GameManager {
     pub fn new() -> Self {
         GameManager {
+            last_screen_click_point: None,
             world: World::new(),
             state: GameState::Title,
         }

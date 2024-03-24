@@ -234,14 +234,3 @@ pub struct BvhNode {
     pub entitiy_aabbs: Vec<EntityAabb>,
     pub aabb: Aabb,
 }
-pub fn draw_aabb(ctx: &CanvasRenderingContext2d, aabb: &Aabb) {
-    ctx.begin_path();
-
-    ctx.move_to(aabb.x_min, aabb.y_min);
-    ctx.line_to(aabb.x_max, aabb.y_min);
-    ctx.line_to(aabb.x_max, aabb.y_max);
-    ctx.line_to(aabb.x_min, aabb.y_max);
-    ctx.line_to(aabb.x_min, aabb.y_min);
-
-    ctx.stroke();
-}

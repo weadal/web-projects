@@ -9,6 +9,7 @@ use web_sys::CanvasRenderingContext2d;
 pub fn tick(w: &mut World, ctx: &CanvasRenderingContext2d) {
     //sys_main::create_ball_by_time(world);
 
+    sys_draw::draw_background(w, ctx);
     sys_draw::draw(w, ctx);
     sys_player::draw_player_range(w, ctx);
 
@@ -29,7 +30,7 @@ pub fn tick(w: &mut World, ctx: &CanvasRenderingContext2d) {
     sys_main::remove_out_of_bounds(w);
 
     sys_main::update_timer(w);
-    log(&format!("time:{:?}", w.vars.ingame_time));
+    //log(&format!("time:{:?}", w.vars.ingame_time));
 
     sys_main::check_gameover(w);
 }
