@@ -180,7 +180,7 @@ fn main_loop(input: Rc<RefCell<Input>>) {
         update(&mut game_manager, &input_rc_clone);
         fps.render();
 
-        game_manager.world.consts.delta_time = fps.delta_time;
+        game_manager.vars.delta_time = fps.delta_time;
 
         if input_rc_clone.borrow().is_mouse_down {
             input_rc_clone.borrow_mut().mouse_down_time += fps.delta_time;
@@ -209,7 +209,7 @@ fn update(manager: &mut GameManager, input: &Rc<RefCell<Input>>) {
             _ => (),
         }
     }
-    input_postprocess(&mut manager.world, input);
+    input_postprocess(manager, input);
 }
 
 fn update_title(
@@ -228,11 +228,14 @@ fn update_title(
     if input.click_point != None {
         input.clear_click_point();
 
+        manager.vars.canvas_width = canvas.width();
+        manager.vars.canvas_height = canvas.height();
+
         manager.world.consts.canvas_width = canvas.width();
         manager.world.consts.canvas_height = canvas.height();
 
         for _ in 0..25 {
-            sys_main::create_ball(&mut manager.world);
+            sys_enemy::create_ball(&mut manager.world);
         }
 
         sys_player::create_player(&mut manager.world);
@@ -272,6 +275,7 @@ fn update_main(
     );
 
     input_to_manager(manager, input);
+    input_to_world(manager);
     game_loop::tick(&mut manager.world, ctx);
 
     if manager.world.vars.is_gameover {
@@ -281,28 +285,35 @@ fn update_main(
 }
 
 fn input_to_manager(manager: &mut GameManager, input: &Rc<RefCell<Input>>) {
-    if manager.world.vars.last_click_point != input.borrow().click_point {
-        manager.world.vars.is_click_detection = true;
+    if let Some(point) = input.borrow().click_point {
+        manager.vars.is_click_detection = true;
 
-        let ingame_click_point =
-            input.borrow().click_point.unwrap() + manager.world.vars.camera_position;
-
-        if manager.world.vars.is_stop == true {
-            let pos = input.borrow().click_point.unwrap() + manager.world.vars.camera_position;
-
-            sys_main::create_building(&mut manager.world, &pos);
-            manager.world.vars.is_stop = false;
-        }
-
-        manager.world.vars.last_click_point = input.borrow().click_point;
+        manager.vars.last_screen_click_point = Some(point);
     }
 
-    if input.borrow().mouse_down_time > 200.0 {
+    manager.vars.mouse_down_time = input.borrow().mouse_down_time;
+}
+fn input_to_world(manager: &mut GameManager) {
+    manager.world.consts.delta_time = manager.vars.delta_time;
+
+    if manager.vars.is_click_detection {
+        manager.world.consts.last_screen_click_point = manager.vars.last_screen_click_point;
+
+        let pos =
+            manager.vars.last_screen_click_point.unwrap() + manager.world.vars.camera_position;
+
+        log(&format!("ingame_click_point:{:?}", pos));
+
+        manager.world.consts.last_ingame_click_point = Some(pos);
+        manager.world.consts.is_click_detection = true;
+    }
+
+    if manager.vars.mouse_down_time > 200.0 {
         manager.world.vars.is_stop = true;
     }
 }
-
-fn input_postprocess(world: &mut World, input: &Rc<RefCell<Input>>) {
-    world.vars.is_click_detection = false;
+fn input_postprocess(manager: &mut GameManager, input: &Rc<RefCell<Input>>) {
+    manager.vars.is_click_detection = false;
+    manager.world.consts.is_click_detection = false;
     input.borrow_mut().clear_click_point();
 }

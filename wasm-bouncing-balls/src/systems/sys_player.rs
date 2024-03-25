@@ -101,7 +101,6 @@ pub fn player_move(w: &mut World) {
             }
         }
 
-        log(&format!("position:{:?}", position));
         position.x = position.x - w.consts.canvas_width as f64 / 2.0;
         position.y = position.y - w.consts.canvas_height as f64 / 2.0;
         w.vars.camera_position = position;
@@ -109,14 +108,14 @@ pub fn player_move(w: &mut World) {
 }
 
 fn player_next_destination_set(w: &mut World, entity_id: &EntityId) -> bool {
-    if !w.vars.is_click_detection {
+    if !w.consts.is_click_detection {
         return false;
     }
 
     let mut dest = w.destination.get_unchecked(entity_id).clone();
     let mut next_dest: Option<Vector2> = None;
 
-    if let Some(click_point) = w.vars.last_click_point {
+    if let Some(click_point) = w.consts.last_ingame_click_point {
         match dest[0] {
             Some(current_dest) => {
                 if current_dest != click_point {

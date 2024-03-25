@@ -398,6 +398,9 @@ impl World {
 pub struct WorldConsts {
     pub canvas_width: u32,
     pub canvas_height: u32,
+    pub last_screen_click_point: Option<Vector2>,
+    pub last_ingame_click_point: Option<Vector2>,
+    pub is_click_detection: bool,
     pub delta_time: f64,
 }
 impl WorldConsts {
@@ -406,13 +409,15 @@ impl WorldConsts {
             canvas_width: 0,
             canvas_height: 0,
             delta_time: 0.0,
+            last_screen_click_point: None,
+            last_ingame_click_point: None,
+            is_click_detection: false,
         }
     }
 }
 pub struct WorldVariables {
     pub is_playing: bool,
-    pub last_click_point: Option<Vector2>,
-    pub is_click_detection: bool,
+
     pub is_stop: bool,
     pub is_gameover: bool,
     pub ingame_time: f64,
@@ -424,8 +429,6 @@ impl WorldVariables {
     fn new() -> Self {
         WorldVariables {
             is_playing: false,
-            last_click_point: None,
-            is_click_detection: false,
             is_stop: false,
             is_gameover: false,
             ingame_time: 0.0,
