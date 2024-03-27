@@ -171,7 +171,7 @@ pub fn player_attack(w: &mut World) {
         //そもそもこの処理自体毎フレーム行うようなものじゃないので後でいい感じにしたい
         match contact_entities {
             Some(_) => {
-                let mut weapons = w.weapon.take_unchecked(&vars.weapons_id);
+                let mut weapons = w.weapon.take(&vars.weapons_id).unwrap();
                 for weapon in weapons.iter_mut() {
                     if let Some(wp) = weapon {
                         wp.is_active = true;
@@ -180,7 +180,7 @@ pub fn player_attack(w: &mut World) {
                 w.weapon.set(&vars.weapons_id, Some(weapons));
             }
             None => {
-                let mut weapons = w.weapon.take_unchecked(&vars.weapons_id);
+                let mut weapons = w.weapon.take(&vars.weapons_id).unwrap();
                 for weapon in weapons.iter_mut() {
                     if let Some(wp) = weapon {
                         wp.is_active = false;

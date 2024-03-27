@@ -27,8 +27,8 @@ pub fn create_ball(w: &mut World) {
         rng.gen_range(ENEMY_SIZE * 2.0..w.consts.canvas_height as f64 - ENEMY_SIZE * 2.0);
 
     let pos = Vector2 {
-        x: rand_x as f64,
-        y: rand_y as f64,
+        x: rand_x as f64 + w.vars.camera_position.x,
+        y: rand_y as f64 + w.vars.camera_position.y,
     };
 
     //velocity初期化
@@ -50,6 +50,8 @@ pub fn create_ball(w: &mut World) {
     };
 
     w.transform.register(entity, transform);
+
+    w.hp.register(entity, 20);
 
     let rect = Rect::new(ENEMY_SIZE, ENEMY_SIZE);
     let collider = Collider::new(rect, Group::Enemy, Vector2::zero());
@@ -126,4 +128,37 @@ pub fn ball_move(w: &mut World) {
     }
 }
 
+pub fn enemy_damage_recieve(w: &mut World) {
+    let entities = collect_entities_from_group(w, &Group::Enemy);
+    for entity_id in entities.iter() {
+        let col = w.collider.get(entity_id).unwrap();
+        let targets = col[0].targets.clone();
+        for target in targets {
+            if *w.group.get(&target).unwrap() == Group::PlayerBullet {
+                log(&format!("damage_recieve:{:?}", entity_id));
+
+                let hp = w.hp.get_mut(entity_id).unwrap();
+                *hp = *hp - 10;
+
+                log(&format!("enemy hp:{:?}", hp));
+
+                if *hp <= 0 {
+                    w.vars.defeated_enemy_count += 1;
+                    w.remove_entity(entity_id);
+                    log(&format!("HPが0になったentity(id:{:?})を破棄", entity_id));
+                    break;
+                }
+            }
+        }
+    }
+}
+
 pub fn enemy_attack(w: &mut World) {}
+
+pub fn create_ball_by_time(w: &mut World) {
+    if w.vars.ingame_time as i32 % 50 == 0 {
+        for _ in 0..BALL_SPAWN_MULTIPRIER {
+            create_ball(w);
+        }
+    }
+}

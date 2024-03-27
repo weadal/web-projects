@@ -239,8 +239,8 @@ pub fn physics_collision_solve_add(w: &mut World) {
     let entities = collect_entities_from_archetype(&w, &[w.collider.id()]);
 
     for entity_id in entities.iter() {
-        let entity_colliders = w.collider.take_unchecked(entity_id);
-        let mut entity_transform = w.transform.take_unchecked(entity_id);
+        let entity_colliders = w.collider.take(entity_id).unwrap();
+        let mut entity_transform = w.transform.take(entity_id).unwrap();
         let targets = entity_colliders[0].targets.clone();
 
         for (index, target_id) in targets.iter().enumerate() {
@@ -253,7 +253,7 @@ pub fn physics_collision_solve_add(w: &mut World) {
                 continue;
             }
 
-            let mut target_transform = w.transform.take_unchecked(target_id);
+            let mut target_transform = w.transform.take(target_id).unwrap();
 
             match entity_colliders[0].target_infos[index].direction {
                 Direction::North => {
@@ -286,8 +286,8 @@ pub fn physics_collision_solve_add_simple(w: &mut World) {
     let entities = collect_entities_from_archetype(&w, &[w.collider.id()]);
 
     for entity_id in entities.iter() {
-        let entity_colliders = w.collider.take_unchecked(entity_id);
-        let mut entity_transform = w.transform.take_unchecked(entity_id);
+        let entity_colliders = w.collider.take(entity_id).unwrap();
+        let mut entity_transform = w.transform.take(entity_id).unwrap();
         let targets = entity_colliders[0].targets.clone();
 
         for (index, target_id) in targets.iter().enumerate() {
@@ -295,7 +295,7 @@ pub fn physics_collision_solve_add_simple(w: &mut World) {
                 continue;
             }
 
-            let mut target_transform = w.transform.take_unchecked(target_id);
+            let mut target_transform = w.transform.take(target_id).unwrap();
 
             let direction = (target_transform.position - entity_transform.position).normalize();
             target_transform.velocity = target_transform.velocity + direction * 60.0;

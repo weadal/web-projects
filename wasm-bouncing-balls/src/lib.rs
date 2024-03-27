@@ -276,11 +276,20 @@ fn update_main(
 
     input_to_manager(manager, input);
     input_to_world(manager);
+
+    //log(&format!("frame:{}", manager.world.consts.frame));
+
     game_loop::tick(&mut manager.world, ctx);
+
+    manager.world.consts.frame += 1;
 
     if manager.world.vars.is_gameover {
         manager.state = GameState::GameOver;
         log("Game Over! Click or Tap to Title");
+        log(&format!(
+            "倒した敵の数:{}",
+            manager.world.vars.defeated_enemy_count
+        ));
     }
 }
 

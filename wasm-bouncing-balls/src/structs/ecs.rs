@@ -222,11 +222,6 @@ impl<T> Component<CompItem<T>> {
             None => return None,
         }
     }
-    pub fn take_unchecked(&mut self, entity_id: &EntityId) -> T {
-        let index = self.id_index_map.get(entity_id);
-        let item = self.items[*index.unwrap()].item.take().unwrap();
-        return item;
-    }
 
     pub fn get_from_index(&self, index: usize) -> Option<&T> {
         if self.items.len() <= index {
@@ -294,7 +289,7 @@ impl<T> Component<CompItem<T>> {
     pub fn register(&mut self, entity: &mut Entity, item: T) {
         //渡されたentityがすでにmapに存在しているかを確認する
         if let Some(_) = self.id_index_map.get(&entity.id) {
-            panic!("渡されたentityに紐づいたitemがすでに存在します 二重に確保することはできません")
+            panic!("渡されたentity:{:?}に紐づいたitemがすでに存在します 二重に確保することはできません",entity.id)
         }
 
         //entity_idからitemsの添字を得るHashmapに追加する
@@ -389,6 +384,7 @@ impl World {
         self.target.remove(entity);
         self.weapon.remove(entity);
         self.player_vars.remove(entity);
+        self.hp.remove(entity);
         //....
     }
 
@@ -404,6 +400,7 @@ pub struct WorldConsts {
     pub last_ingame_click_point: Option<Vector2>,
     pub is_click_detection: bool,
     pub delta_time: f64,
+    pub frame: u32,
 }
 impl WorldConsts {
     fn new() -> Self {
@@ -414,6 +411,7 @@ impl WorldConsts {
             last_screen_click_point: None,
             last_ingame_click_point: None,
             is_click_detection: false,
+            frame: 0,
         }
     }
 }
@@ -424,6 +422,7 @@ pub struct WorldVariables {
     pub is_gameover: bool,
     pub ingame_time: f64,
     pub camera_position: Vector2,
+    pub defeated_enemy_count: u32,
     pub bvh: Vec<Option<BvhNode>>,
 }
 
@@ -435,6 +434,7 @@ impl WorldVariables {
             is_gameover: false,
             ingame_time: 0.0,
             camera_position: Vector2 { x: 0.0, y: 0.0 },
+            defeated_enemy_count: 0,
             bvh: vec![None; Group::None as usize],
         }
     }

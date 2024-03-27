@@ -7,8 +7,6 @@ use crate::{
 use web_sys::CanvasRenderingContext2d;
 
 pub fn tick(w: &mut World, ctx: &CanvasRenderingContext2d) {
-    //sys_main::create_ball_by_time(world);
-
     sys_draw::draw_background(w, ctx);
     sys_draw::draw(w, ctx);
     sys_player::draw_player_range(w, ctx);
@@ -21,6 +19,8 @@ pub fn tick(w: &mut World, ctx: &CanvasRenderingContext2d) {
         return;
     }
 
+    sys_enemy::create_ball_by_time(w);
+
     sys_collision::collision(w, ctx);
     sys_player::player_move(w);
     sys_player::player_attack(w);
@@ -32,11 +32,12 @@ pub fn tick(w: &mut World, ctx: &CanvasRenderingContext2d) {
     sys_enemy::ball_move(w);
     sys_main::player_reflection(w);
 
-    sys_player::player_damage_recieve(w);
-
     //sys_collision::physics_collision_solve_add(w);
     sys_collision::physics_collision_solve_add_simple(w);
     sys_main::position_update(w);
+
+    sys_player::player_damage_recieve(w);
+    sys_enemy::enemy_damage_recieve(w);
 
     sys_main::update_timer(w);
     //log(&format!("time:{:?}", w.vars.ingame_time));

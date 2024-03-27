@@ -114,24 +114,6 @@ pub fn player_reflection(w: &mut World) {
     }
 }
 
-// pub fn create_ball_by_time(w: &mut World) {
-//     let entities = collect_entities_from_archetype(&w, &[w.clock.id(), w.timer_alarm.id()]);
-//     let timer_id = &entities[0];
-
-//     let timer = w.clock.get_mut(timer_id).unwrap().clone();
-
-//     if timer > w.timer_alarm.get(timer_id).unwrap()[0] {
-//         for _ in 0..BALL_SPAWN_MULTIPRIER {
-//             create_ball(w);
-//         }
-
-//         let mut buffer = w.timer_alarm.get(timer_id).unwrap().clone();
-//         buffer[0] = timer + BALL_SPAWN_SPAN;
-
-//         w.timer_alarm.set(timer_id, buffer);
-//     }
-// }
-
 // pub fn ball_fire(w: &mut World) {
 //     let entities = collect_entities_from_group(w, &group::BALL);
 
