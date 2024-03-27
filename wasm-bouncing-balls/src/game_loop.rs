@@ -14,10 +14,7 @@ pub fn tick(w: &mut World, ctx: &CanvasRenderingContext2d) {
     sys_player::draw_player_range(w, ctx);
 
     if w.vars.is_stop {
-        log(&format!("a"));
-
         if w.consts.is_click_detection {
-            log(&format!("b"));
             sys_main::create_building(w, &w.consts.last_ingame_click_point.unwrap());
             w.vars.is_stop = false;
         }
@@ -34,6 +31,8 @@ pub fn tick(w: &mut World, ctx: &CanvasRenderingContext2d) {
     //sys_enemy::ball_reflection(w);
     sys_enemy::ball_move(w);
     sys_main::player_reflection(w);
+
+    sys_player::player_damage_recieve(w);
 
     //sys_collision::physics_collision_solve_add(w);
     sys_collision::physics_collision_solve_add_simple(w);

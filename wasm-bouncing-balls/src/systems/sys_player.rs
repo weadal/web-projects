@@ -18,7 +18,11 @@ pub fn create_player(w: &mut World) {
     let id = w.entities.instantiate_entity();
 
     let weapons_id = sys_weapon::create_weapons(w, id);
-    let vars = PlayerVars { weapons_id };
+
+    let vars = PlayerVars {
+        is_alive: true,
+        weapons_id,
+    };
 
     let mut range = 0;
 
@@ -71,6 +75,8 @@ pub fn create_player(w: &mut World) {
     w.clock.register(entity, clock);
 
     w.player_vars.register(entity, vars);
+
+    w.hp.register(entity, 100);
 }
 
 //現状簡易的な移動
@@ -186,6 +192,26 @@ pub fn player_attack(w: &mut World) {
     }
 }
 
+pub fn player_damage_recieve(w: &mut World) {
+    let entities = collect_entities_from_group(w, &Group::Player);
+    for player_entity_id in entities.iter() {
+        let col = w.collider.get(player_entity_id).unwrap();
+        let targets = col[0].targets.clone();
+        for target in targets {
+            if *w.group.get(&target).unwrap() == Group::Enemy {
+                let hp = w.hp.get_mut(player_entity_id).unwrap();
+                *hp = *hp - 10;
+
+                log(&format!("hp:{:?}", hp));
+
+                if *hp <= 0 {
+                    w.player_vars.get_mut(player_entity_id).unwrap().is_alive = false;
+                }
+            }
+        }
+    }
+}
+
 pub fn draw_player_range(w: &mut World, ctx: &CanvasRenderingContext2d) {
     ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,255.0,255.0,0.4)"));
     ctx.set_line_width(2.0);
@@ -208,5 +234,6 @@ pub mod p_collider {
 }
 
 pub struct PlayerVars {
+    pub is_alive: bool,
     pub weapons_id: EntityId,
 }

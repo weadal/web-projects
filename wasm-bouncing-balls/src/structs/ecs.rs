@@ -348,6 +348,7 @@ pub struct World {
     pub target: Component<CompItem<Vec<Option<EntityId>>>>,
     pub weapon: Component<CompItem<Vec<Option<Weapon>>>>,
     pub player_vars: Component<CompItem<PlayerVars>>,
+    pub hp: Component<CompItem<i32>>,
 }
 impl World {
     pub fn new() -> Self {
@@ -366,6 +367,7 @@ impl World {
             target: Component::new(id_iter.next()),
             weapon: Component::new(id_iter.next()),
             player_vars: Component::new(id_iter.next()),
+            hp: Component::new(id_iter.next()),
         }
     }
 

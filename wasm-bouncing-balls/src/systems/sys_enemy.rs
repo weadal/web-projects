@@ -125,3 +125,5 @@ pub fn ball_move(w: &mut World) {
         w.transform.set(entity_id, Some(transform));
     }
 }
+
+pub fn enemy_attack(w: &mut World) {}

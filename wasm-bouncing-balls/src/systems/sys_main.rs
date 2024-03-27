@@ -219,6 +219,19 @@ pub fn check_gameover(w: &mut World) {
     if let None = alive_entities {
         w.vars.is_gameover = true;
     }
+
+    //死んでいるプレイヤーしかいなくなったらゲームオーバー
+    let players = collect_entities_from_group(w, &Group::Player);
+    let mut is_all_players_dead = true;
+    for player in players {
+        if w.player_vars.get(&player).unwrap().is_alive {
+            is_all_players_dead = false;
+            break;
+        }
+    }
+    if is_all_players_dead {
+        w.vars.is_gameover = true;
+    }
 }
 
 pub fn collect_entities_from_archetype(w: &World, values: &[ComponentId]) -> Vec<EntityId> {
