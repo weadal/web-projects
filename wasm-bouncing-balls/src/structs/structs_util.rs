@@ -233,9 +233,10 @@ pub enum Group {
     System = 0,
     Player = 1,
     Enemy = 2,
-    Bullet = 3,
-    Building = 4,
-    Item = 5,
+    PlayerBullet = 3,
+    EnemyBullet = 4,
+    Building = 5,
+    Item = 6,
     None = MAX_GROUP as isize,
 }
 impl Group {
@@ -243,7 +244,8 @@ impl Group {
         match self {
             Group::Player => return true,
             Group::Enemy => return true,
-            Group::Bullet => return true,
+            Group::PlayerBullet => return true,
+            Group::EnemyBullet => return true,
             Group::Building => return true,
             Group::Item => return true,
             _ => return false,
@@ -254,9 +256,10 @@ impl Group {
             0 => return Group::System,
             1 => return Group::Player,
             2 => return Group::Enemy,
-            3 => return Group::Bullet,
-            4 => return Group::Building,
-            5 => return Group::Item,
+            3 => return Group::PlayerBullet,
+            4 => return Group::EnemyBullet,
+            5 => return Group::Building,
+            6 => return Group::Item,
             _ => return Group::None,
         }
     }
@@ -268,23 +271,30 @@ impl Group {
                     Group::System,
                     Group::Player,
                     Group::Enemy,
-                    Group::Bullet,
+                    Group::PlayerBullet,
+                    Group::EnemyBullet,
                     Group::Building,
                     Group::Item,
                 ]
             }
             Group::Player => {
-                return vec![Group::Enemy, Group::Bullet, Group::Building, Group::Item]
+                return vec![
+                    Group::Enemy,
+                    Group::EnemyBullet,
+                    Group::Building,
+                    Group::Item,
+                ]
             }
-            Group::Enemy => return vec![Group::Bullet, Group::Player, Group::Building],
-            Group::Bullet => return vec![Group::Player, Group::Enemy, Group::Building],
-            Group::Building => return vec![Group::Player, Group::Enemy],
+            Group::Enemy => return vec![Group::PlayerBullet, Group::Player, Group::Building],
+            Group::PlayerBullet => return vec![Group::Enemy],
+            Group::EnemyBullet => return vec![Group::Player, Group::Building],
+            Group::Building => return vec![Group::Player, Group::Enemy, Group::EnemyBullet],
             Group::Item => return vec![Group::Player],
             _ => return vec![],
         }
     }
 
-    pub fn is_possible_contact_group(&self, group: Group) -> bool {
+    pub fn is_possible_contact_by_group(&self, group: Group) -> bool {
         let possible_contact_groups = self.possible_contact_groups();
         for ref_group in possible_contact_groups {
             if group == ref_group {
@@ -314,10 +324,10 @@ mod tests {
         let g0 = Group::System;
         let g1 = Group::Player;
         let g2 = Group::Enemy;
-        let g3 = Group::Bullet;
+        let g3 = Group::PlayerBullet;
         let g4 = Group::Building;
         let g5 = Group::Item;
 
-        assert!(g2.is_possible_contact_group(g3));
+        assert!(g2.is_possible_contact_by_group(g3));
     }
 }

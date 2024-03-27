@@ -314,6 +314,17 @@ fn narrow_collision_check(
     entity: &EntityId,
     target: &EntityId,
 ) -> Result<CollisionInfo, String> {
+    //接触しないグループ同士だったら早期リターン
+    let entity_group = w.group.get(entity).unwrap();
+    let target_group = w.group.get(target).unwrap();
+    if !entity_group.is_possible_contact_by_group(*target_group) {
+        let message = format!(
+            "接触なし entity:{:?}({:?}), target:{:?}({:?})",
+            entity, entity_group, target, target_group
+        );
+        return Err(message);
+    }
+
     //暫定的に1つ目のコライダーだけを処理
     let entity_collider = w.collider.get(&entity).unwrap()[0].clone();
     let entity_transform = w.transform.get(&entity).unwrap().clone();
@@ -425,7 +436,7 @@ fn narrow_collision_check(
 
     let message = format!(
         "接触なし entity:{:?}({:?}), target:{:?}({:?})",
-        entity, entity_collider.group, target, target_collider.group
+        entity, entity_group, target, target_group
     );
     Err(message)
 }
@@ -442,7 +453,7 @@ fn draw_bvh(w: &mut World, ctx: &CanvasRenderingContext2d) {
                         ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,255.0,0.0,0.4)"));
                         ctx.set_line_width(2.0);
                     }
-                    Group::Bullet => {
+                    Group::PlayerBullet => {
                         ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,0.0,255.0,0.4)"));
                         ctx.set_line_width(2.0);
                     }
@@ -904,10 +915,10 @@ mod tests {
         w.transform.register(entity, transform);
 
         let rect = Rect::new(BALL_SIZE, BALL_SIZE);
-        let collider = Collider::new(rect, Group::Bullet, Vector2::zero());
+        let collider = Collider::new(rect, Group::PlayerBullet, Vector2::zero());
         w.collider.register(entity, vec![collider]);
 
-        w.group.register(entity, Group::Bullet);
+        w.group.register(entity, Group::PlayerBullet);
         w.clock.register(entity, Clock::new());
         pub fn test_create_static_ball_pos(w: &mut World, pos: &Vector2) {
             let id = w.entities.instantiate_entity();

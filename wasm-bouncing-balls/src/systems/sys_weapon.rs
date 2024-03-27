@@ -85,11 +85,17 @@ pub fn create_bullet(w: &mut World, bullet_param: &BulletParamater) -> EntityId 
 
     w.transform.register(entity, transform);
 
+    let my_group = if *w.group.get(&bullet_param.parent_id).unwrap() == Group::Enemy {
+        Group::EnemyBullet
+    } else {
+        Group::PlayerBullet
+    };
+
     w.draw_param.register(entity, burret_draw_param());
-    w.group.register(entity, Group::Bullet);
+    w.group.register(entity, my_group);
 
     let rect = Rect::new(BULLET_SIZE, BULLET_SIZE);
-    let collider = Collider::new(rect, Group::Bullet, Vector2::zero());
+    let collider = Collider::new(rect, my_group, Vector2::zero());
     w.collider.register(entity, vec![collider]);
     id
 }
@@ -112,6 +118,6 @@ pub fn create_aim_bullet(w: &mut World, parent_id: &EntityId, direction: &Vector
     w.transform.register(entity, transform);
 
     w.draw_param.register(entity, burret_draw_param());
-    w.group.register(entity, Group::Bullet);
+    w.group.register(entity, Group::PlayerBullet);
     w.collider.register(entity, vec![]);
 }
