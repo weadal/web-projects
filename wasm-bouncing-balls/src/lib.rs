@@ -234,7 +234,7 @@ fn update_title(
         manager.world.consts.canvas_width = canvas.width();
         manager.world.consts.canvas_height = canvas.height();
 
-        for _ in 0..25 {
+        for _ in 0..500 {
             sys_enemy::create_ball(&mut manager.world);
         }
 

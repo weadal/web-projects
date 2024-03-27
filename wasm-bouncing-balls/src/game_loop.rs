@@ -25,19 +25,23 @@ pub fn tick(w: &mut World, ctx: &CanvasRenderingContext2d) {
     }
 
     sys_collision::collision(w, ctx);
-    sys_main::position_update(w);
     sys_player::player_move(w);
-    sys_player::player_attack(w);
+    //sys_player::player_attack(w);
 
     sys_weapon::time_increase(w);
     sys_weapon::fire(w);
 
-    sys_enemy::ball_reflection(w);
+    //sys_enemy::ball_reflection(w);
+    sys_enemy::ball_move(w);
     sys_main::player_reflection(w);
-    sys_main::remove_out_of_bounds(w);
+
+    //sys_collision::physics_collision_solve_add(w);
+    sys_collision::physics_collision_solve_add_simple(w);
+    sys_main::position_update(w);
 
     sys_main::update_timer(w);
     //log(&format!("time:{:?}", w.vars.ingame_time));
 
+    //sys_main::remove_out_of_bounds(w);
     sys_main::check_gameover(w);
 }

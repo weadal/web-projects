@@ -21,9 +21,10 @@ pub fn create_ball(w: &mut World) {
 
     //position初期化
     let mut rng = rand::thread_rng();
-    let mut rand_x = rng.gen_range(BALL_SIZE * 2.0..w.consts.canvas_width as f64 - BALL_SIZE * 2.0);
+    let mut rand_x =
+        rng.gen_range(ENEMY_SIZE * 2.0..w.consts.canvas_width as f64 - ENEMY_SIZE * 2.0);
     let mut rand_y =
-        rng.gen_range(BALL_SIZE * 2.0..w.consts.canvas_height as f64 - BALL_SIZE * 2.0);
+        rng.gen_range(ENEMY_SIZE * 2.0..w.consts.canvas_height as f64 - ENEMY_SIZE * 2.0);
 
     let pos = Vector2 {
         x: rand_x as f64,
@@ -33,6 +34,7 @@ pub fn create_ball(w: &mut World) {
     //velocity初期化
     rand_x = rng.gen_range(-1.0..1.0);
     rand_y = rng.gen_range(-1.0..1.0);
+
     let vel = Vector2::normalize(&Vector2 {
         x: rand_x,
         y: rand_y,
@@ -49,11 +51,11 @@ pub fn create_ball(w: &mut World) {
 
     w.transform.register(entity, transform);
 
-    let rect = Rect::new(BALL_SIZE, BALL_SIZE);
+    let rect = Rect::new(ENEMY_SIZE, ENEMY_SIZE);
     let collider = Collider::new(rect, Group::Enemy, Vector2::zero());
     w.collider.register(entity, vec![collider]);
 
-    let r = Rect::new(BALL_SIZE, BALL_SIZE);
+    let r = Rect::new(ENEMY_SIZE, ENEMY_SIZE);
     let draw_param = DrawParamater::new(js_color_rgba(255.0, 255.0, 255.0, 1.0), Shape::Rect(r));
 
     w.draw_param.register(entity, draw_param);
@@ -103,10 +105,23 @@ pub fn ball_move(w: &mut World) {
     let entities = collect_entities_from_group(w, &Group::Enemy);
     for entity_id in entities.iter() {
         let mut transform = w.transform.get(entity_id).unwrap().clone();
-        let vel_mag = transform.velocity.magnitude();
-        let right = transform.velocity.right() * 0.02;
-        transform.velocity = transform.velocity + right;
-        transform.velocity = Vector2::normalize(&transform.velocity) * vel_mag;
+
+        let pos = transform.position;
+
+        let players = collect_entities_from_group(w, &Group::Player);
+        let mut closest_player_pos = Vector2 {
+            x: f64::INFINITY,
+            y: f64::INFINITY,
+        };
+        for player in players.iter() {
+            let player_pos = w.transform.get(player).unwrap().position;
+            if player_pos.magnitude() < closest_player_pos.magnitude() {
+                closest_player_pos = player_pos;
+            }
+        }
+
+        transform.velocity = (closest_player_pos - pos).normalize() * 50.0;
+
         w.transform.set(entity_id, Some(transform));
     }
 }

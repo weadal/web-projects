@@ -52,9 +52,9 @@ impl Collider {
     pub fn local_aabb(&self) -> Aabb {
         Aabb {
             x_max: self.shape.width / 2.0,
-            x_min: self.shape.width / 2.0,
+            x_min: -(self.shape.width / 2.0),
             y_max: self.shape.height / 2.0,
-            y_min: self.shape.height / 2.0,
+            y_min: -(self.shape.height / 2.0),
         }
     }
 
@@ -231,19 +231,17 @@ pub fn collision(w: &mut World, ctx: &CanvasRenderingContext2d) {
 
     //log(&format!("{:?}", entities_with_possible_contact.borrow()));
 
-    physics_collision_solve(w);
-
     //draw_bvh(w, ctx);
     //各々の当たり判定処理は別のsystemで行う
 }
 
-fn physics_collision_solve(w: &mut World) {
+pub fn physics_collision_solve_add(w: &mut World) {
     let entities = collect_entities_from_archetype(&w, &[w.collider.id()]);
 
     for entity_id in entities.iter() {
-        let mut entity_colliders = w.collider.take_unchecked(entity_id);
+        let entity_colliders = w.collider.take_unchecked(entity_id);
         let mut entity_transform = w.transform.take_unchecked(entity_id);
-        let targets = entity_colliders[0].targets_enter.clone();
+        let targets = entity_colliders[0].targets.clone();
 
         for (index, target_id) in targets.iter().enumerate() {
             // log(&format!(
@@ -259,26 +257,49 @@ fn physics_collision_solve(w: &mut World) {
 
             match entity_colliders[0].target_infos[index].direction {
                 Direction::North => {
-                    let temp = entity_transform.velocity.y;
-                    entity_transform.velocity.y = target_transform.velocity.y;
-                    target_transform.velocity.y = temp;
+                    entity_transform.velocity.y += 60.0;
+                    target_transform.velocity.y -= 60.0;
                 }
                 Direction::East => {
-                    let temp = entity_transform.velocity.x;
-                    entity_transform.velocity.x = target_transform.velocity.x;
-                    target_transform.velocity.x = temp;
+                    entity_transform.velocity.x -= 60.0;
+                    target_transform.velocity.x += 60.0;
                 }
                 Direction::South => {
-                    let temp = entity_transform.velocity.y;
-                    entity_transform.velocity.y = target_transform.velocity.y;
-                    target_transform.velocity.y = temp;
+                    entity_transform.velocity.y -= 60.0;
+                    target_transform.velocity.y += 60.0;
                 }
                 Direction::West => {
-                    let temp = entity_transform.velocity.x;
-                    entity_transform.velocity.x = target_transform.velocity.x;
-                    target_transform.velocity.x = temp;
+                    entity_transform.velocity.x += 60.0;
+                    target_transform.velocity.x -= 60.0;
                 }
             }
+
+            w.transform.set(target_id, Some(target_transform));
+        }
+
+        w.collider.set(entity_id, Some(entity_colliders));
+        w.transform.set(entity_id, Some(entity_transform));
+    }
+}
+
+pub fn physics_collision_solve_add_simple(w: &mut World) {
+    let entities = collect_entities_from_archetype(&w, &[w.collider.id()]);
+
+    for entity_id in entities.iter() {
+        let entity_colliders = w.collider.take_unchecked(entity_id);
+        let mut entity_transform = w.transform.take_unchecked(entity_id);
+        let targets = entity_colliders[0].targets.clone();
+
+        for (index, target_id) in targets.iter().enumerate() {
+            if target_id <= entity_id {
+                continue;
+            }
+
+            let mut target_transform = w.transform.take_unchecked(target_id);
+
+            let direction = (target_transform.position - entity_transform.position).normalize();
+            target_transform.velocity = target_transform.velocity + direction * 60.0;
+            entity_transform.velocity = entity_transform.velocity - direction * 60.0;
 
             w.transform.set(target_id, Some(target_transform));
         }
@@ -439,28 +460,6 @@ fn draw_bvh(w: &mut World, ctx: &CanvasRenderingContext2d) {
             None => w.vars.bvh[i] = None,
         }
     }
-
-    // {
-    //     ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,255.0,0.0,0.4)"));
-    //     ctx.set_line_width(2.0);
-    //     let node = w.vars.bvh[Group::Enemy as usize].take().unwrap();
-    //     let node_box = Box::new(node);
-
-    //     draw_bvh_inner(&ctx, &node_box);
-
-    //     w.vars.bvh[Group::Enemy as usize] = Some(*node_box);
-    // }
-
-    // {
-    //     ctx.set_stroke_style(&JsValue::from_str("rgba(255.0,0.0,255.0.0,0.4)"));
-    //     ctx.set_line_width(2.0);
-    //     let node = w.vars.bvh[Group::Bullet as usize].take().unwrap();
-    //     let node_box = Box::new(node);
-
-    //     draw_bvh_inner(&ctx, &node_box);
-
-    //     w.vars.bvh[Group::Bullet as usize] = Some(*node_box);
-    // }
 }
 fn draw_bvh_inner<'a>(ctx: &'a CanvasRenderingContext2d, node: &Box<BvhNode>, camera_pos: Vector2) {
     sys_draw::draw_aabb(ctx, &node.aabb, camera_pos);
@@ -512,7 +511,6 @@ fn create_bvh(w: &mut World) {
     }
 }
 
-//全部のentityをid順に走査する場合ignore_lower_idをtrueにすると重複を無視する(自身より若いidのentityを処理する際にすでに衝突検出が行われている)
 fn get_contact_with<'a>(
     entity_aabb: &'a EntityAabb,
     node: &Box<BvhNode>,
@@ -781,8 +779,6 @@ mod tests {
 
         //log(&format!("{:?}", entities_with_possible_contact.borrow()));
         println!("{:?}", entities_with_possible_contact.borrow());
-
-        physics_collision_solve(w);
 
         //draw_bvh(w, ctx);
         //各々の当たり判定処理は別のsystemで行う
